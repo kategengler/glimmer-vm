@@ -11,9 +11,11 @@ import {
 } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 
-import { ComponentArgs, Primitive } from './interfaces';
-import { MachineRegister, SavedRegister, Op } from '@glimmer/vm';
+import { ComponentArgs } from '../interfaces';
+import { SavedRegister, Op, MachineOp } from '@glimmer/vm';
 import { SerializedInlineBlock, Statements, Core, Expression } from '@glimmer/wire-format';
+import { Operand } from '@glimmer/encoder';
+import { Encoder } from './encoder';
 
 export type Label = string;
 
@@ -36,7 +38,7 @@ export interface Replayable {
   body(): void;
 }
 
-export type Block = () => void;
+export type Block = (encoder: Encoder) => void;
 
 export interface DynamicComponent {
   definition: WireFormat.Expression;
@@ -102,6 +104,29 @@ export interface StringOperand {
   value: string;
 }
 
+export function str(value: string): StringOperand {
+  return { type: 'string', value };
+}
+
+export interface BooleanOperand {
+  type: 'boolean';
+  value: boolean;
+}
+
+export function bool(value: boolean): BooleanOperand {
+  return { type: 'boolean', value };
+}
+
+// For numbers that don't fit inside the operand size
+export interface NumberOperand {
+  type: 'number';
+  value: number;
+}
+
+export function num(value: number): NumberOperand {
+  return { type: 'number', value };
+}
+
 export interface ArrayOperand {
   type: 'array';
   value: number[];
@@ -117,30 +142,47 @@ export interface HandleOperand {
   value: number;
 }
 
+export interface SerializableOperand {
+  type: 'serializable';
+  value: unknown;
+}
+
+export interface OtherOperand {
+  type: 'other';
+  value: unknown;
+}
+
 export type BuilderOperand =
   | StringOperand
+  | BooleanOperand
+  | NumberOperand
   | ArrayOperand
   | StringArrayOperand
   | HandleOperand
+  | SerializableOperand
+  | OtherOperand
   | number;
+
 export type BuilderOperands =
   | []
   | [BuilderOperand]
   | [BuilderOperand, BuilderOperand]
   | [BuilderOperand, BuilderOperand, BuilderOperand];
 
+export type Operands = [] | [Operand] | [Operand, Operand] | [Operand, Operand, Operand];
+
 export default interface OpcodeBuilder<Locator = unknown> {
   readonly compiler: CompilerBuilder<Locator>;
   readonly component: ComponentBuilder;
+  readonly encoder: Encoder;
   readonly referrer: Locator;
 
   readonly asPartial: boolean;
   readonly evalSymbols: Option<string[]>;
 
   push(name: Op, ...args: BuilderOperands): void;
+  pushMachine(name: MachineOp, ...args: Operands): void;
 
-  replayableIf(options: ReplayableIf): void;
-  replayable(options: Replayable): void;
   frame(options: Block): void;
 
   expr(expression: WireFormat.Expression): void;
@@ -150,23 +192,15 @@ export default interface OpcodeBuilder<Locator = unknown> {
 
   toBoolean(): void;
 
-  dup(register?: MachineRegister, offset?: number): void;
   pop(count?: number): void;
-
-  pushPrimitiveReference(primitive: Primitive): void;
-
-  label(label: string): void;
-  labels(block: Block): void;
 
   withSavedRegister(register: SavedRegister, block: Block): void;
 
   list(label: string, block: Block): void;
   iterate(label: string): void;
-  putIterator(): void;
 
   jump(label: string): void;
   jumpUnless(label: string): void;
-  returnTo(label: string): void;
 
   remoteElement(block: Block): void;
   staticAttr(name: string, namespace: Option<string>, value: string): void;
@@ -174,7 +208,6 @@ export default interface OpcodeBuilder<Locator = unknown> {
 
   guardedAppend(expression: Expression, trusting: boolean): void;
 
-  dynamicScope(names: Option<string[]>, block: Block): void;
   bindDynamicScope(names: string[]): void;
 
   staticComponentHelper(
@@ -201,7 +234,6 @@ export default interface OpcodeBuilder<Locator = unknown> {
 
   // TODO: These don't seem like the right abstraction, but leaving
   // them for now in the interest of expedience.
-  popFrame(): void;
   commit(): number;
   templates(blocks: Core.Blocks): NamedBlocks;
   inlineBlock(block: SerializedInlineBlock): CompilableBlock;

@@ -17,6 +17,7 @@ export const enum PrimitiveType {
   NUMBER = 0b000,
   FLOAT = 0b001,
   STRING = 0b010,
+  // 0=false 1=true 2=null 3=undefined
   BOOLEAN_OR_VOID = 0b011,
   NEGATIVE = 0b100,
   BIG_NUM = 0b101,
@@ -225,7 +226,7 @@ export class Constants<Locator> extends WriteOnlyConstants implements RuntimeCon
 }
 
 export class LazyConstants extends Constants<Opaque> {
-  private others: Opaque[] = [];
+  private others: unknown[] = [];
   protected serializables: Opaque[] = [];
 
   serializable(value: Opaque): number {
@@ -246,7 +247,7 @@ export class LazyConstants extends Constants<Opaque> {
     return this.others[value - 1] as T;
   }
 
-  other(other: Opaque): number {
+  other(other: unknown): number {
     return this.others.push(other);
   }
 }

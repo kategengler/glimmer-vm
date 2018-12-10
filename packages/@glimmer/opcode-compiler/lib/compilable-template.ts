@@ -9,8 +9,7 @@ import {
   BlockSymbolTable,
   BlockWithContext,
 } from '@glimmer/interfaces';
-
-export const PLACEHOLDER_HANDLE = -1;
+import { PLACEHOLDER_HANDLE } from './interfaces';
 
 export class CompilableProgram implements ICompilableProgram {
   private compiled: Option<number> = null;

@@ -38,7 +38,7 @@ export interface CompileTimeConstants<Locator = unknown> {
   stringArray(strings: string[]): number;
   array(values: number[]): number;
   handle(locator: Locator): number;
-  serializable(value: Opaque): number;
+  serializable(value: unknown): number;
   number(value: number): number;
 }
 

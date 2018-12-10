@@ -1,4 +1,4 @@
-import { LazyOpcodeBuilder } from './opcode-builder';
+import { LazyOpcodeBuilder } from './opcode-builder/builder';
 import { Macros } from './syntax';
 import { AbstractCompiler } from './compiler';
 import {

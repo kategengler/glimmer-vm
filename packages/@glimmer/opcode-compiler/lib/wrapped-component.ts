@@ -8,7 +8,7 @@ import {
 
 import { ComponentArgs, ComponentBuilder as IComponentBuilder } from './interfaces';
 
-import OpcodeBuilder from './opcode-builder-interfaces';
+import OpcodeBuilder from './opcode-builder/interfaces';
 import { ATTRS_BLOCK } from './syntax';
 
 export class WrappedBuilder<Locator> implements CompilableProgram {

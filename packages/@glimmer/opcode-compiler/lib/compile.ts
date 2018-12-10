@@ -1,6 +1,6 @@
 import { statementCompiler } from './syntax';
 import { debugCompiler, AnyAbstractCompiler } from './compiler';
-import { OpcodeBuilderImpl } from './opcode-builder';
+import { OpcodeBuilderImpl } from './opcode-builder/builder';
 import { Statement } from '@glimmer/wire-format';
 import { Compiler, Recast } from '@glimmer/interfaces';
 import { DEBUG } from '@glimmer/local-debug-flags';

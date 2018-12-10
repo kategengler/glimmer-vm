@@ -1,16 +1,24 @@
 import { Option, Opaque, Compiler, NamedBlocks as INamedBlocks } from '@glimmer/interfaces';
 import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
-import { $fp, Op, $s0 } from '@glimmer/vm';
+import { $fp, Op, $s0, MachineOp, $sp } from '@glimmer/vm';
 import * as WireFormat from '@glimmer/wire-format';
 import * as ClientSide from './client-side';
-import OpcodeBuilder from './opcode-builder-interfaces';
+import OpcodeBuilder from './opcode-builder/interfaces';
 
 import Ops = WireFormat.Ops;
 import S = WireFormat.Statements;
 import E = WireFormat.Expressions;
 import C = WireFormat.Core;
 import { EMPTY_BLOCKS } from './utils';
-import { constant } from './opcode-builder';
+import { constant } from './opcode-builder/builder';
+import {
+  dynamicScope,
+  pushPrimitiveReference,
+  label,
+  reserveMachineTarget,
+  replayable,
+  replayableIf,
+} from './opcode-builder/helpers';
 
 export type TupleSyntax = WireFormat.Statement | WireFormat.TupleExpression;
 export type CompilerFunction<T extends TupleSyntax> = ((sexp: T, builder: OpcodeBuilder) => void);
@@ -173,17 +181,17 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
 
     let { referrer } = builder;
 
-    builder.replayableIf({
+    replayableIf(builder.encoder, {
       args() {
         builder.expr(name);
-        builder.dup();
+        builder.push(Op.Dup, $sp, 0);
         return 2;
       },
 
       ifTrue() {
         builder.invokePartial(referrer, builder.evalSymbols!, evalInfo);
         builder.push(Op.PopScope);
-        builder.popFrame(); // FIXME: WAT
+        builder.pushMachine(MachineOp.PopFrame);
       },
     });
   });
@@ -278,7 +286,7 @@ function dynamicAttr<Locator>(
 
 let _expressionCompiler: Compilers<WireFormat.TupleExpression>;
 
-export function expressionCompiler() {
+export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
   if (_expressionCompiler) {
     return _expressionCompiler;
   }
@@ -357,7 +365,7 @@ export function expressionCompiler() {
   });
 
   EXPRESSIONS.add(Ops.Undefined, (_sexp, builder) => {
-    return builder.pushPrimitiveReference(undefined);
+    return pushPrimitiveReference(builder.encoder, undefined);
   });
 
   EXPRESSIONS.add(Ops.HasBlock, (sexp: E.HasBlock, builder) => {
@@ -518,7 +526,7 @@ export function populateBuiltins(
       throw new Error(`SYNTAX ERROR: #if requires a single argument`);
     }
 
-    builder.replayableIf({
+    replayableIf(builder.encoder, {
       args() {
         builder.expr(params[0]);
         builder.toBoolean();
@@ -554,7 +562,7 @@ export function populateBuiltins(
       throw new Error(`SYNTAX ERROR: #unless requires a single argument`);
     }
 
-    builder.replayableIf({
+    replayableIf(builder.encoder, {
       args() {
         builder.expr(params[0]);
         builder.toBoolean();
@@ -590,10 +598,10 @@ export function populateBuiltins(
       throw new Error(`SYNTAX ERROR: #with requires a single argument`);
     }
 
-    builder.replayableIf({
+    replayableIf(builder.encoder, {
       args() {
         builder.expr(params[0]);
-        builder.dup();
+        builder.push(Op.Dup, $sp, 0);
         builder.toBoolean();
         return 2;
       },
@@ -634,12 +642,12 @@ export function populateBuiltins(
     // END:    Noop
     //         Exit
 
-    builder.replayable({
+    replayable(builder.encoder, {
       args() {
         if (hash && hash[0][0] === 'key') {
           builder.expr(hash[1][0]);
         } else {
-          builder.pushPrimitiveReference(null);
+          pushPrimitiveReference(builder.encoder, null);
         }
 
         builder.expr(params[0]);
@@ -648,29 +656,29 @@ export function populateBuiltins(
       },
 
       body() {
-        builder.putIterator();
+        builder.push(Op.PutIterator);
 
         builder.jumpUnless('ELSE');
 
         builder.frame(() => {
-          builder.dup($fp, 1);
+          builder.push(Op.Dup, $fp, 1);
 
-          builder.returnTo('ITER');
+          reserveMachineTarget(builder.encoder, MachineOp.ReturnTo, 'ITER');
           builder.list('BODY', () => {
-            builder.label('ITER');
+            label(builder.encoder, 'ITER');
             builder.iterate('BREAK');
 
-            builder.label('BODY');
+            label(builder.encoder, 'BODY');
             builder.invokeStaticBlock(unwrap(blocks.get('default')), 2);
             builder.pop(2);
             builder.jump('FINALLY');
 
-            builder.label('BREAK');
+            label(builder.encoder, 'BREAK');
           });
         });
 
         builder.jump('FINALLY');
-        builder.label('ELSE');
+        label(builder.encoder, 'ELSE');
 
         if (blocks.has('else')) {
           builder.invokeStaticBlock(blocks.get('else')!);
@@ -684,7 +692,7 @@ export function populateBuiltins(
       throw new Error(`SYNTAX ERROR: #in-element requires a single argument`);
     }
 
-    builder.replayableIf({
+    replayableIf(builder.encoder, {
       args() {
         let [keys, values] = hash!;
 
@@ -699,7 +707,7 @@ export function populateBuiltins(
 
         builder.expr(params[0]);
 
-        builder.dup();
+        builder.push(Op.Dup, $sp, 0);
 
         return 4;
       },
@@ -716,7 +724,7 @@ export function populateBuiltins(
 
       builder.params(expressions);
 
-      builder.dynamicScope(names, () => {
+      dynamicScope(builder.encoder, names, () => {
         builder.invokeStaticBlock(unwrap(blocks.get('default')));
       });
     } else {

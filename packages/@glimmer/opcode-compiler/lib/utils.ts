@@ -9,7 +9,7 @@ interface NamedBlocksDict {
 export class NamedBlocksImpl implements INamedBlocks {
   static fromWireFormat(
     blocks: WireFormat.Core.Blocks,
-    callback: (block: WireFormat.SerializedInlineBlock) => CompilableBlock
+    callback: (block: Option<WireFormat.SerializedInlineBlock>) => Option<CompilableBlock>
   ): INamedBlocks {
     return namedBlocks(blocks, callback);
   }
@@ -27,7 +27,7 @@ export class NamedBlocksImpl implements INamedBlocks {
   get(name: string): Option<CompilableBlock> {
     if (!this.blocks) return null;
 
-    return this.blocks[name];
+    return this.blocks[name] || null;
   }
 
   has(name: string): boolean {
@@ -54,7 +54,7 @@ export const EMPTY_BLOCKS = new NamedBlocksImpl(null);
 
 function namedBlocks(
   blocks: WireFormat.Core.Blocks,
-  callback: (block: WireFormat.SerializedInlineBlock) => CompilableBlock
+  callback: (block: Option<WireFormat.SerializedInlineBlock>) => Option<CompilableBlock>
 ): INamedBlocks {
   let out: NamedBlocksDict = dict();
 

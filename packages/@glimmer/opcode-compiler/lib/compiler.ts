@@ -1,4 +1,4 @@
-import { OpcodeBuilderImpl, StdOpcodeBuilder } from './opcode-builder';
+import { OpcodeBuilderImpl, StdOpcodeBuilder } from './opcode-builder/builder';
 import { Macros } from './syntax';
 import { compile } from './compile';
 import { debugSlice } from './debug';
@@ -20,30 +20,6 @@ import {
 import { Statements, Core, Expression, Statement } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
 
-class StdLib {
-  static compile(compiler: Compiler): StdLib {
-    let main = this.std(compiler, b => b.main());
-    let trustingGuardedAppend = this.std(compiler, b => b.stdAppend(true));
-    let cautiousGuardedAppend = this.std(compiler, b => b.stdAppend(false));
-
-    return new StdLib(main, trustingGuardedAppend, cautiousGuardedAppend);
-  }
-
-  private static std(compiler: Compiler, callback: (builder: StdOpcodeBuilder) => void): number {
-    return StdOpcodeBuilder.build(compiler, callback);
-  }
-
-  constructor(
-    public main: number,
-    private trustingGuardedAppend: number,
-    private cautiousGuardedAppend: number
-  ) {}
-
-  getAppend(trusting: boolean) {
-    return trusting ? this.trustingGuardedAppend : this.cautiousGuardedAppend;
-  }
-}
-
 export abstract class AbstractCompiler<
   Locator,
   Builder extends OpcodeBuilderImpl<Locator>,
@@ -60,7 +36,7 @@ export abstract class AbstractCompiler<
   }
 
   initialize() {
-    this.stdLib = StdLib.compile(this);
+    this.stdLib = StdOpcodeBuilder.compileStd(this);
   }
 
   get constants(): CompileTimeConstants {

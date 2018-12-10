@@ -13,12 +13,12 @@ export {
   EagerOpcodeBuilder,
   OpcodeBuilderImpl,
   StdOpcodeBuilder,
-} from './lib/opcode-builder';
+} from './lib/opcode-builder/builder';
 
 export {
   default as OpcodeBuilder,
   OpcodeBuilderConstructor,
-} from './lib/opcode-builder-interfaces';
+} from './lib/opcode-builder/interfaces';
 
 export { PartialDefinition } from './lib/partial-template';
 

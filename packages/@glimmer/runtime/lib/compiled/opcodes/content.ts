@@ -18,6 +18,7 @@ import {
 import { CheckPathReference } from './-debug-strip';
 import { isEmpty, isSafeString, isFragment, isNode, shouldCoerce } from '../../dom/normalize';
 import DynamicTextContent from '../../vm/content/text';
+import { ContentType } from '@glimmer/interfaces';
 
 export class IsCurriedComponentDefinitionReference extends ConditionalReference {
   static create(inner: Reference<Opaque>): IsCurriedComponentDefinitionReference {
@@ -27,16 +28,6 @@ export class IsCurriedComponentDefinitionReference extends ConditionalReference 
   toBool(value: Opaque): boolean {
     return isCurriedComponentDefinition(value);
   }
-}
-
-export const enum ContentType {
-  Component,
-  String,
-  Empty,
-  SafeString,
-  Fragment,
-  Node,
-  Other,
 }
 
 export class ContentTypeReference implements Reference<ContentType> {
