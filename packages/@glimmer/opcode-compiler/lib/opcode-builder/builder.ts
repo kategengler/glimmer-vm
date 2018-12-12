@@ -50,7 +50,6 @@ import { DEBUG } from '@glimmer/local-debug-flags';
 import { debugCompiler, AnyAbstractCompiler } from '../compiler';
 import { Encoder } from './encoder';
 import {
-  pushYieldableBlock,
   pushCompilable,
   main,
   resolveCompilable,
@@ -63,6 +62,8 @@ import {
   expr,
   invokeComponent,
   invokeStaticComponent,
+  compileArgs,
+  yieldBlock,
 } from './helpers';
 
 export const constant = {
@@ -275,8 +276,8 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
     });
   }
 
-  yield(to: number, params: Option<WireFormat.Core.Params>) {
-    this.compileArgs(params, null, EMPTY_BLOCKS, false);
+  yieldz(to: number, params: Option<WireFormat.Core.Params>) {
+    compileArgs(this.encoder, this.resolver, this.meta, params, null, EMPTY_BLOCKS, false);
     this.encoder.push(Op.GetBlock, to);
     resolveCompilable(this.encoder, this.isEager);
     this.encoder.push(Op.InvokeYield);
@@ -332,14 +333,14 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
         this.encoder.push(Op.Dup, $sp, 0);
       });
 
-      this.jumpUnless('BODY');
+      reserveTarget(this.encoder, Op.JumpUnless, 'BODY');
 
       this.encoder.push(Op.Fetch, $s1);
       this.encoder.isComponentAttrs = true;
       this.encoder.push(Op.PutComponentOperations);
       this.encoder.push(Op.OpenDynamicElement);
       this.encoder.push(Op.DidCreateElement, $s0);
-      this.yield(attrsBlockNumber, []);
+      yieldBlock(this.encoder, this.resolver, this.meta, attrsBlockNumber, []);
       this.setComponentAttrs(false);
       this.encoder.push(Op.FlushElement);
 
@@ -489,7 +490,7 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
 
   helper({ handle, params, hash }: CompileHelper) {
     this.encoder.pushMachine(MachineOp.PushFrame);
-    this.compileArgs(params, hash, EMPTY_BLOCKS, true);
+    compileArgs(this.encoder, this.resolver, this.meta, params, hash, EMPTY_BLOCKS, true);
     this.encoder.push(Op.Helper, this.constants.handle(handle));
     this.encoder.pushMachine(MachineOp.PopFrame);
     this.encoder.push(Op.Fetch, $v0);
@@ -524,41 +525,6 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
     }
 
     return params.length;
-  }
-
-  protected compileArgs(
-    params: Option<WireFormat.Core.Params>,
-    hash: Option<WireFormat.Core.Hash>,
-    blocks: NamedBlocks,
-    synthetic: boolean
-  ): void {
-    if (blocks.hasAny) {
-      pushYieldableBlock(this.encoder, blocks.get('default'), this.isEager);
-      pushYieldableBlock(this.encoder, blocks.get('else'), this.isEager);
-      pushYieldableBlock(this.encoder, blocks.get('attrs'), this.isEager);
-    }
-
-    let count = this.params(params);
-
-    let flags = count << 4;
-
-    if (synthetic) flags |= 0b1000;
-
-    if (blocks) {
-      flags |= 0b111;
-    }
-
-    let names: string[] = EMPTY_ARRAY;
-
-    if (hash) {
-      names = hash[0];
-      let val = hash[1];
-      for (let i = 0; i < val.length; i++) {
-        expr(this.encoder, this.resolver, this.meta, val[i]);
-      }
-    }
-
-    this.encoder.push(Op.PushArgs, { type: 'string-array', value: names }, flags);
   }
 
   templates(blocks: WireFormat.Core.Blocks): NamedBlocks {

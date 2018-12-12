@@ -237,8 +237,6 @@ export default interface OpcodeBuilder<Locator = unknown> {
   wrappedComponent(layout: LayoutWithContext<Locator>, attrsBlockNumber: number): number;
   staticComponent(handle: number, args: ComponentArgs): void;
 
-  yield(to: number, params: Option<WireFormat.Core.Params>): void;
-
   // eval
   invokePartial(referrer: Locator, symbols: string[], evalInfo: number[]): void;
 

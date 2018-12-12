@@ -31,6 +31,7 @@ import {
   modifier,
   invokeComponent,
   invokeStaticComponent,
+  yieldBlock,
 } from './opcode-builder/helpers';
 import { Encoder } from './opcode-builder/encoder';
 
@@ -255,18 +256,21 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     });
   });
 
-  STATEMENTS.add(Ops.Yield, (sexp: WireFormat.Statements.Yield, builder) => {
+  STATEMENTS.addSimple(Ops.Yield, (sexp: WireFormat.Statements.Yield, encoder, resolver, meta) => {
     let [, to, params] = sexp;
 
-    builder.yield(to, params);
+    yieldBlock(encoder, resolver, meta, to, params);
   });
 
-  STATEMENTS.add(Ops.AttrSplat, (sexp: WireFormat.Statements.AttrSplat, builder) => {
-    let [, to] = sexp;
+  STATEMENTS.addSimple(
+    Ops.AttrSplat,
+    (sexp: WireFormat.Statements.AttrSplat, encoder, resolver, meta) => {
+      let [, to] = sexp;
 
-    builder.yield(to, []);
-    builder.setComponentAttrs(false);
-  });
+      yieldBlock(encoder, resolver, meta, to, []);
+      encoder.isComponentAttrs = false;
+    }
+  );
 
   STATEMENTS.add(Ops.Debugger, (sexp: WireFormat.Statements.Debugger, builder) => {
     let [, evalInfo] = sexp;

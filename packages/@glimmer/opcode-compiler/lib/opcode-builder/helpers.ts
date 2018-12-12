@@ -103,6 +103,21 @@ export function primitive(encoder: Encoder, _primitive: Primitive) {
   encoder.push(Op.Primitive, immediate);
 }
 
+export function yieldBlock<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  to: number,
+  params: Option<WireFormat.Core.Params>
+) {
+  compileArgs(encoder, resolver, meta, params, null, EMPTY_BLOCKS, false);
+  encoder.push(Op.GetBlock, to);
+  resolveCompilable(encoder, meta.isEager);
+  encoder.push(Op.InvokeYield);
+  encoder.push(Op.PopScope);
+  encoder.pushMachine(MachineOp.PopFrame);
+}
+
 export function pushYieldableBlock(
   encoder: Encoder,
   block: Option<CompilableBlock>,
