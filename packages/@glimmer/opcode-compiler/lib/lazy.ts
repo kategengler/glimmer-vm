@@ -32,6 +32,6 @@ export class LazyCompiler<Locator> extends AbstractCompiler<Locator, LazyOpcodeB
   }
 
   builderFor(containingLayout: LayoutWithContext<Locator>): LazyOpcodeBuilder<Locator> {
-    return new LazyOpcodeBuilder(this, containingLayout);
+    return new LazyOpcodeBuilder(this, containingLayout, false);
   }
 }

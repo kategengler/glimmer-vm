@@ -89,7 +89,7 @@ export interface CompileHelper {
   hash: Core.Hash;
 }
 
-export interface CompilerBuilder<Locator> {
+export interface CompilationResolver<Locator> {
   resolveLayoutForTag(tag: string, referrer: Locator): MaybeResolvedLayout;
   resolveHelper(name: string, referrer: Locator): Option<number>;
   resolveModifier(name: string, referrer: Locator): Option<number>;
@@ -100,8 +100,8 @@ export interface ComponentBuilder {
 }
 
 export interface StringOperand {
-  type: 'string';
-  value: string;
+  readonly type: 'string';
+  readonly value: string;
 }
 
 export function str(value: string): StringOperand {
@@ -132,9 +132,23 @@ export interface ArrayOperand {
   value: number[];
 }
 
+export function arr(value: number[]): ArrayOperand {
+  return {
+    type: 'array',
+    value,
+  };
+}
+
 export interface StringArrayOperand {
   type: 'string-array';
   value: string[];
+}
+
+export function strArray(value: string[]): StringArrayOperand {
+  return {
+    type: 'string-array',
+    value,
+  };
 }
 
 export interface HandleOperand {
@@ -171,21 +185,25 @@ export type BuilderOperands =
 
 export type Operands = [] | [Operand] | [Operand, Operand] | [Operand, Operand, Operand];
 
+export interface ContainingMetadata<Locator> {
+  asPartial: boolean;
+  isEager: boolean;
+  evalSymbols: Option<string[]>;
+  referrer: Locator;
+}
+
 export default interface OpcodeBuilder<Locator = unknown> {
-  readonly compiler: CompilerBuilder<Locator>;
+  readonly resolver: CompilationResolver<Locator>;
   readonly component: ComponentBuilder;
   readonly encoder: Encoder;
   readonly referrer: Locator;
-
-  readonly asPartial: boolean;
-  readonly evalSymbols: Option<string[]>;
+  readonly meta: ContainingMetadata<Locator>;
 
   push(name: Op, ...args: BuilderOperands): void;
   pushMachine(name: MachineOp, ...args: Operands): void;
 
   frame(options: Block): void;
 
-  expr(expression: WireFormat.Expression): void;
   params(expression: WireFormat.Expression[]): void;
 
   invokeStaticBlock(block: CompilableBlock, callerCount?: number): void;
@@ -203,7 +221,6 @@ export default interface OpcodeBuilder<Locator = unknown> {
   jumpUnless(label: string): void;
 
   remoteElement(block: Block): void;
-  staticAttr(name: string, namespace: Option<string>, value: string): void;
   dynamicAttr(name: string, namespace: Option<string>, trusting: boolean): void;
 
   guardedAppend(expression: Expression, trusting: boolean): void;
@@ -216,20 +233,13 @@ export default interface OpcodeBuilder<Locator = unknown> {
     template: Option<CompilableBlock>
   ): boolean;
 
-  helper(helper: CompileHelper): void;
-  modifier(modifier: CompileHelper): void;
-
   invokeDynamicComponent(options: DynamicComponent): void;
-  invokeStaticComponent(options: StaticComponent): void;
-  curryComponent(options: CurryComponent): void;
-  invokeComponent(options: Component): void;
   wrappedComponent(layout: LayoutWithContext<Locator>, attrsBlockNumber: number): number;
   staticComponent(handle: number, args: ComponentArgs): void;
 
   yield(to: number, params: Option<WireFormat.Core.Params>): void;
 
   // eval
-  debugger(symbols: string[], evalInfo: number[]): void;
   invokePartial(referrer: Locator, symbols: string[], evalInfo: number[]): void;
 
   // TODO: These don't seem like the right abstraction, but leaving
@@ -239,6 +249,5 @@ export default interface OpcodeBuilder<Locator = unknown> {
   inlineBlock(block: SerializedInlineBlock): CompilableBlock;
   compileInline(sexp: Statements.Append): ['expr', Expression] | true;
   compileBlock(block: CompileBlock): void;
-  hasBlockParams(symbol: number): void;
   setComponentAttrs(value: boolean): void;
 }

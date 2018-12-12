@@ -91,7 +91,7 @@ export class EagerCompiler<Locator> extends AbstractCompiler<
   }
 
   builderFor(containingLayout: LayoutWithContext<Locator>): EagerOpcodeBuilder<Locator> {
-    return new EagerOpcodeBuilder(this, containingLayout);
+    return new EagerOpcodeBuilder(this, containingLayout, true);
   }
 }
 

@@ -22,7 +22,7 @@ export default class TestMacros extends Macros {
         params = [];
       }
 
-      let { handle } = builder.compiler.resolveLayoutForTag(name, builder.referrer);
+      let { handle } = builder.resolver.resolveLayoutForTag(name, builder.referrer);
 
       if (handle !== null) {
         builder.component.static(handle, [params, hashToArgs(hash), blocks]);
@@ -33,7 +33,7 @@ export default class TestMacros extends Macros {
     });
 
     inlines.addMissing((name, params, hash, builder) => {
-      let { handle } = builder.compiler.resolveLayoutForTag(name, builder.referrer);
+      let { handle } = builder.resolver.resolveLayoutForTag(name, builder.referrer);
 
       if (handle !== null) {
         builder.component.static(handle, [params!, hashToArgs(hash), EMPTY_BLOCKS]);

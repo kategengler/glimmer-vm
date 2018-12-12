@@ -29,6 +29,7 @@ export class Labels {
 
 export class Encoder {
   readonly labelsStack = new Stack<Labels>();
+  isComponentAttrs = false;
 
   constructor(private encoder: InstructionEncoder, readonly constants: CompileTimeConstants) {}
 

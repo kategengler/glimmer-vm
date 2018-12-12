@@ -112,6 +112,9 @@ export namespace Statements {
     | [Opcodes.ClientSideStatement, any]
     | [Opcodes.ClientSideStatement, any, any];
 
+  /**
+   * A Handlebars statement
+   */
   export type Statement =
     | Text
     | Append
@@ -142,6 +145,7 @@ export namespace Statements {
   export type Parameter = Attribute | Argument;
 }
 
+/** A Handlebars statement */
 export type Statement = Statements.Statement;
 export type Attribute = Statements.Attribute;
 export type Parameter = Statements.Parameter;

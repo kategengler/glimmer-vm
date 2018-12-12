@@ -3,7 +3,11 @@ import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
 import { $fp, Op, $s0, MachineOp, $sp } from '@glimmer/vm';
 import * as WireFormat from '@glimmer/wire-format';
 import * as ClientSide from './client-side';
-import OpcodeBuilder from './opcode-builder/interfaces';
+import OpcodeBuilder, {
+  str,
+  CompilationResolver,
+  ContainingMetadata,
+} from './opcode-builder/interfaces';
 
 import Ops = WireFormat.Ops;
 import S = WireFormat.Statements;
@@ -18,25 +22,75 @@ import {
   reserveMachineTarget,
   replayable,
   replayableIf,
+  staticAttr,
+  startDebugger,
+  hasBlockParams,
+  helper,
+  expr,
+  curryComponent,
+  modifier,
+  invokeComponent,
+  invokeStaticComponent,
 } from './opcode-builder/helpers';
+import { Encoder } from './opcode-builder/encoder';
 
 export type TupleSyntax = WireFormat.Statement | WireFormat.TupleExpression;
 export type CompilerFunction<T extends TupleSyntax> = ((sexp: T, builder: OpcodeBuilder) => void);
+export type NewCompilerFunction<T extends TupleSyntax, Locator> = ((
+  sexp: T,
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>
+) => void);
+export type RegisteredSyntax<T extends TupleSyntax, Locator> =
+  | {
+      type: 'full';
+      f: CompilerFunction<T>;
+    }
+  | { type: 'mini'; f: NewCompilerFunction<T, Locator> };
 
 export const ATTRS_BLOCK = '&attrs';
 
-export class Compilers<Syntax extends TupleSyntax> {
+export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
   private names = dict<number>();
-  private funcs: CompilerFunction<Syntax>[] = [];
+  private funcs: RegisteredSyntax<Syntax, Locator>[] = [];
 
   constructor(private offset = 0) {}
 
   add<T extends Syntax>(name: number, func: CompilerFunction<T>): void {
-    this.funcs.push(func as CompilerFunction<Syntax>);
+    this.funcs.push({ type: 'full', f: func as CompilerFunction<Syntax> });
     this.names[name] = this.funcs.length - 1;
   }
 
-  compile(sexp: Syntax, builder: OpcodeBuilder<unknown>): void {
+  addSimple<T extends Syntax>(name: number, func: NewCompilerFunction<T, Locator>): void {
+    this.funcs.push({ type: 'mini', f: func as NewCompilerFunction<Syntax, Locator> });
+    this.names[name] = this.funcs.length - 1;
+  }
+
+  compileExpr(
+    sexp: WireFormat.Expression,
+    encoder: Encoder,
+    resolver: CompilationResolver<Locator>,
+    meta: ContainingMetadata<Locator>
+  ): void {
+    let name: number = sexp![this.offset];
+    let index = this.names[name];
+    let func = this.funcs[index];
+    assert(
+      !!func,
+      `expected an implementation for ${
+        this.offset === 0 ? Ops[sexp![0]] : ClientSide.Ops[sexp![1]]
+      }`
+    );
+
+    if (func.type !== 'mini') {
+      throw new Error('Expressions must be compiled in the new style');
+    }
+
+    func.f(sexp as Syntax, encoder, resolver, meta);
+  }
+
+  compile(sexp: Syntax, builder: OpcodeBuilder<Locator>): void {
     let name: number = sexp[this.offset];
     let index = this.names[name];
     let func = this.funcs[index];
@@ -44,43 +98,48 @@ export class Compilers<Syntax extends TupleSyntax> {
       !!func,
       `expected an implementation for ${this.offset === 0 ? Ops[sexp[0]] : ClientSide.Ops[sexp[1]]}`
     );
-    func(sexp, builder);
+
+    if (func.type === 'full') {
+      func.f(sexp, builder);
+    } else {
+      func.f(sexp, builder.encoder, builder.resolver, builder.meta);
+    }
   }
 }
 
-let _statementCompiler: Compilers<WireFormat.Statement>;
+let _statementCompiler: Compilers<WireFormat.Statement, unknown>;
 
-export function statementCompiler(): Compilers<WireFormat.Statement> {
+export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   if (_statementCompiler) {
     return _statementCompiler;
   }
 
-  const STATEMENTS = (_statementCompiler = new Compilers<WireFormat.Statement>());
+  const STATEMENTS = (_statementCompiler = new Compilers<WireFormat.Statement, unknown>());
 
-  STATEMENTS.add(Ops.Text, (sexp: S.Text, builder) => {
-    builder.push(Op.Text, constant.string(sexp[1]));
+  STATEMENTS.addSimple(Ops.Text, (sexp: S.Text, encoder) => {
+    encoder.push(Op.Text, { type: 'string', value: sexp[1] });
   });
 
-  STATEMENTS.add(Ops.Comment, (sexp: S.Comment, builder) => {
-    builder.push(Op.Comment, constant.string(sexp[1]));
+  STATEMENTS.addSimple(Ops.Comment, (sexp: S.Comment, encoder) => {
+    encoder.push(Op.Comment, { type: 'string', value: sexp[1] });
   });
 
-  STATEMENTS.add(Ops.CloseElement, (_sexp: S.CloseElement, builder) => {
-    builder.push(Op.CloseElement);
+  STATEMENTS.addSimple(Ops.CloseElement, (_sexp, encoder) => {
+    encoder.push(Op.CloseElement);
   });
 
-  STATEMENTS.add(Ops.FlushElement, (_sexp: S.FlushElement, builder) => {
-    builder.push(Op.FlushElement);
+  STATEMENTS.addSimple(Ops.FlushElement, (_sexp, encoder) => {
+    encoder.push(Op.FlushElement);
   });
 
   STATEMENTS.add(Ops.Modifier, (sexp: S.Modifier, builder) => {
     let { referrer } = builder;
     let [, name, params, hash] = sexp;
 
-    let handle = builder.compiler.resolveModifier(name, referrer);
+    let handle = builder.resolver.resolveModifier(name, referrer);
 
     if (handle !== null) {
-      builder.modifier({ handle, params, hash });
+      modifier(builder.encoder, builder.resolver, builder.meta, { handle, params, hash });
     } else {
       throw new Error(
         `Compile Error ${name} is not a modifier: Helpers may not be used in the element form.`
@@ -88,9 +147,9 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
     }
   });
 
-  STATEMENTS.add(Ops.StaticAttr, (sexp: S.StaticAttr, builder) => {
+  STATEMENTS.addSimple(Ops.StaticAttr, (sexp: S.StaticAttr, encoder) => {
     let [, name, value, namespace] = sexp;
-    builder.staticAttr(name, namespace, value as string);
+    staticAttr(encoder, name, namespace, value as string);
   });
 
   STATEMENTS.add(Ops.DynamicAttr, (sexp: S.DynamicAttr, builder) => {
@@ -101,14 +160,14 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
     dynamicAttr(sexp, true, builder);
   });
 
-  STATEMENTS.add(Ops.OpenElement, (sexp: S.OpenElement, builder) => {
-    builder.push(Op.OpenElement, constant.string(sexp[1]));
+  STATEMENTS.addSimple(Ops.OpenElement, (sexp: S.OpenElement, encoder) => {
+    encoder.push(Op.OpenElement, str(sexp[1]));
   });
 
-  STATEMENTS.add(Ops.OpenSplattedElement, (sexp: S.SplatElement, builder) => {
-    builder.setComponentAttrs(true);
-    builder.push(Op.PutComponentOperations);
-    builder.push(Op.OpenElement, constant.string(sexp[1]));
+  STATEMENTS.addSimple(Ops.OpenSplattedElement, (sexp: S.SplatElement, encoder) => {
+    encoder.isComponentAttrs = true;
+    encoder.push(Op.PutComponentOperations);
+    encoder.push(Op.OpenElement, str(sexp[1]));
   });
 
   STATEMENTS.add(Ops.DynamicComponent, (sexp: S.DynamicComponent, builder) => {
@@ -139,7 +198,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
     let [, tag, _attrs, args, blocks] = sexp;
     let { referrer } = builder;
 
-    let { handle, capabilities, compilable } = builder.compiler.resolveLayoutForTag(tag, referrer);
+    let { handle, capabilities, compilable } = builder.resolver.resolveLayoutForTag(tag, referrer);
 
     if (handle !== null && capabilities !== null) {
       let attrs: WireFormat.Statement[] = [
@@ -151,7 +210,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
 
       if (compilable) {
         builder.push(Op.PushComponentDefinition, constant.handle(handle));
-        builder.invokeStaticComponent({
+        invokeStaticComponent(builder.encoder, builder.resolver, builder.meta, {
           capabilities,
           layout: compilable,
           attrs: attrsBlock,
@@ -162,7 +221,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
         });
       } else {
         builder.push(Op.PushComponentDefinition, constant.handle(handle));
-        builder.invokeComponent({
+        invokeComponent(builder.encoder, builder.resolver, builder.meta, {
           capabilities,
           attrs: attrsBlock,
           params: null,
@@ -183,13 +242,13 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
 
     replayableIf(builder.encoder, {
       args() {
-        builder.expr(name);
+        expr(builder.encoder, builder.resolver, builder.meta, name);
         builder.push(Op.Dup, $sp, 0);
         return 2;
       },
 
       ifTrue() {
-        builder.invokePartial(referrer, builder.evalSymbols!, evalInfo);
+        builder.invokePartial(referrer, builder.meta.evalSymbols!, evalInfo);
         builder.push(Op.PopScope);
         builder.pushMachine(MachineOp.PopFrame);
       },
@@ -212,7 +271,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
   STATEMENTS.add(Ops.Debugger, (sexp: WireFormat.Statements.Debugger, builder) => {
     let [, evalInfo] = sexp;
 
-    builder.debugger(builder.evalSymbols!, evalInfo);
+    startDebugger(builder.encoder, builder.meta.evalSymbols!, evalInfo);
   });
 
   STATEMENTS.add(Ops.ClientSideStatement, (sexp: WireFormat.Statements.ClientSide, builder) => {
@@ -235,7 +294,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement> {
     builder.compileBlock({ name, params, hash, blocks: builder.templates(named) });
   });
 
-  const CLIENT_SIDE = new Compilers<ClientSide.ClientSideStatement>(1);
+  const CLIENT_SIDE = new Compilers<ClientSide.ClientSideStatement, unknown>(1);
 
   CLIENT_SIDE.add(
     ClientSide.Ops.OpenComponentElement,
@@ -275,7 +334,7 @@ function dynamicAttr<Locator>(
 ) {
   let [, name, value, namespace] = sexp;
 
-  builder.expr(value);
+  expr(builder.encoder, builder.resolver, builder.meta, value);
 
   if (namespace) {
     builder.dynamicAttr(name, namespace, trusting);
@@ -293,32 +352,30 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
 
   const EXPRESSIONS = (_expressionCompiler = new Compilers<WireFormat.TupleExpression>());
 
-  EXPRESSIONS.add(Ops.Unknown, (sexp: E.Unknown, builder) => {
-    let { compiler, referrer, asPartial } = builder;
+  EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, encoder, resolver, meta) => {
     let name = sexp[1];
 
-    let handle = compiler.resolveHelper(name, referrer);
+    let handle = resolver.resolveHelper(name, meta.referrer);
 
     if (handle !== null) {
-      builder.helper({ handle, params: null, hash: null });
-    } else if (asPartial) {
-      builder.push(Op.ResolveMaybeLocal, constant.string(name));
+      helper(encoder, resolver, meta, { handle, params: null, hash: null });
+    } else if (meta.asPartial) {
+      encoder.push(Op.ResolveMaybeLocal, constant.string(name));
     } else {
-      builder.push(Op.GetVariable, 0);
-      builder.push(Op.GetProperty, constant.string(name));
+      encoder.push(Op.GetVariable, 0);
+      encoder.push(Op.GetProperty, constant.string(name));
     }
   });
 
-  EXPRESSIONS.add(Ops.Concat, (sexp: E.Concat, builder) => {
+  EXPRESSIONS.addSimple(Ops.Concat, (sexp: E.Concat, encoder, resolver, meta) => {
     let parts = sexp[1];
     for (let i = 0; i < parts.length; i++) {
-      builder.expr(parts[i]);
+      expr(encoder, resolver, meta, parts[i]);
     }
-    builder.push(Op.Concat, parts.length);
+    encoder.push(Op.Concat, parts.length);
   });
 
-  EXPRESSIONS.add(Ops.Helper, (sexp: E.Helper, builder) => {
-    let { compiler, referrer } = builder;
+  EXPRESSIONS.addSimple(Ops.Helper, (sexp: E.Helper, encoder, resolver, meta) => {
     let [, name, params, hash] = sexp;
 
     // TODO: triage this in the WF compiler
@@ -326,54 +383,59 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
       assert(params.length, 'SYNTAX ERROR: component helper requires at least one argument');
 
       let [definition, ...restArgs] = params;
-      builder.curryComponent({ definition, params: restArgs, hash, synthetic: true });
+      curryComponent(encoder, resolver, meta, {
+        definition,
+        params: restArgs,
+        hash,
+        synthetic: true,
+      });
       return;
     }
 
-    let handle = compiler.resolveHelper(name, referrer);
+    let handle = resolver.resolveHelper(name, meta.referrer);
 
     if (handle !== null) {
-      builder.helper({ handle, params, hash });
+      helper(encoder, resolver, meta, { handle, params, hash });
     } else {
       throw new Error(`Compile Error: ${name} is not a helper`);
     }
   });
 
-  EXPRESSIONS.add(Ops.Get, (sexp: E.Get, builder) => {
+  EXPRESSIONS.addSimple(Ops.Get, (sexp: E.Get, encoder) => {
     let [, head, path] = sexp;
-    builder.push(Op.GetVariable, head);
+    encoder.push(Op.GetVariable, head);
     for (let i = 0; i < path.length; i++) {
-      builder.push(Op.GetProperty, constant.string(path[i]));
+      encoder.push(Op.GetProperty, str(path[i]));
     }
   });
 
-  EXPRESSIONS.add(Ops.MaybeLocal, (sexp: E.MaybeLocal, builder) => {
+  EXPRESSIONS.addSimple(Ops.MaybeLocal, (sexp: E.MaybeLocal, encoder, _resolver, meta) => {
     let [, path] = sexp;
 
-    if (builder.asPartial) {
+    if (meta.asPartial) {
       let head = path[0];
       path = path.slice(1);
 
-      builder.push(Op.ResolveMaybeLocal, constant.string(head));
+      encoder.push(Op.ResolveMaybeLocal, constant.string(head));
     } else {
-      builder.push(Op.GetVariable, 0);
+      encoder.push(Op.GetVariable, 0);
     }
 
     for (let i = 0; i < path.length; i++) {
-      builder.push(Op.GetProperty, constant.string(path[i]));
+      encoder.push(Op.GetProperty, constant.string(path[i]));
     }
   });
 
-  EXPRESSIONS.add(Ops.Undefined, (_sexp, builder) => {
-    return pushPrimitiveReference(builder.encoder, undefined);
+  EXPRESSIONS.addSimple(Ops.Undefined, (_sexp, encoder) => {
+    return pushPrimitiveReference(encoder, undefined);
   });
 
-  EXPRESSIONS.add(Ops.HasBlock, (sexp: E.HasBlock, builder) => {
-    builder.push(Op.HasBlock, sexp[1]);
+  EXPRESSIONS.addSimple(Ops.HasBlock, (sexp: E.HasBlock, encoder) => {
+    encoder.push(Op.HasBlock, sexp[1]);
   });
 
-  EXPRESSIONS.add(Ops.HasBlockParams, (sexp: E.HasBlockParams, builder) => {
-    builder.hasBlockParams(sexp[1]);
+  EXPRESSIONS.addSimple(Ops.HasBlockParams, (sexp: E.HasBlockParams, encoder, _resolver, meta) => {
+    hasBlockParams(encoder, meta.isEager, sexp[1]);
   });
 
   return EXPRESSIONS;
@@ -528,7 +590,7 @@ export function populateBuiltins(
 
     replayableIf(builder.encoder, {
       args() {
-        builder.expr(params[0]);
+        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
         builder.toBoolean();
         return 1;
       },
@@ -564,7 +626,7 @@ export function populateBuiltins(
 
     replayableIf(builder.encoder, {
       args() {
-        builder.expr(params[0]);
+        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
         builder.toBoolean();
         return 1;
       },
@@ -600,7 +662,7 @@ export function populateBuiltins(
 
     replayableIf(builder.encoder, {
       args() {
-        builder.expr(params[0]);
+        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
         builder.push(Op.Dup, $sp, 0);
         builder.toBoolean();
         return 2;
@@ -645,12 +707,12 @@ export function populateBuiltins(
     replayable(builder.encoder, {
       args() {
         if (hash && hash[0][0] === 'key') {
-          builder.expr(hash[1][0]);
+          expr(builder.encoder, builder.resolver, builder.meta, hash[1][0]);
         } else {
           pushPrimitiveReference(builder.encoder, null);
         }
 
-        builder.expr(params[0]);
+        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
 
         return 2;
       },
@@ -699,13 +761,13 @@ export function populateBuiltins(
         for (let i = 0; i < keys.length; i++) {
           let key = keys[i];
           if (key === 'nextSibling' || key === 'guid') {
-            builder.expr(values[i]);
+            expr(builder.encoder, builder.resolver, builder.meta, values[i]);
           } else {
             throw new Error(`SYNTAX ERROR: #in-element does not take a \`${keys[0]}\` option`);
           }
         }
 
-        builder.expr(params[0]);
+        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
 
         builder.push(Op.Dup, $sp, 0);
 

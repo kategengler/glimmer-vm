@@ -5,12 +5,32 @@ import {
   CompilableBlock,
   CompilableTemplate,
   ContentType,
+  NamedBlocks,
 } from '@glimmer/interfaces';
-import { Op, $s0, MachineOp, $sp } from '@glimmer/vm';
+import { Op, $s0, MachineOp, $sp, $v0 } from '@glimmer/vm';
 import { PrimitiveType } from '@glimmer/program';
-import { BuilderOperand, str, bool, num, Block, When } from './interfaces';
+import {
+  BuilderOperand,
+  Block,
+  When,
+  str,
+  bool,
+  num,
+  strArray,
+  arr,
+  ContainingMetadata,
+  CompilationResolver,
+  CompileHelper,
+  CurryComponent,
+  StaticComponent,
+  Component,
+} from './interfaces';
 import { OpcodeSize } from '@glimmer/encoder';
 import { Primitive, PLACEHOLDER_HANDLE } from '../interfaces';
+import * as WireFormat from '@glimmer/wire-format';
+import { expressionCompiler, ATTRS_BLOCK } from '../syntax';
+import { EMPTY_ARRAY } from '@glimmer/util';
+import { EMPTY_BLOCKS } from '../utils';
 
 export function main(encoder: Encoder) {
   encoder.push(Op.Main, $s0);
@@ -120,6 +140,173 @@ export function resolveCompilable(encoder: Encoder, isEager: boolean) {
   }
 }
 
+export function invokeStaticComponent<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  { capabilities, layout, attrs, params, hash, synthetic, blocks }: StaticComponent
+) {
+  let { symbolTable } = layout;
+
+  let bailOut = symbolTable.hasEval || capabilities.prepareArgs;
+
+  if (bailOut) {
+    invokeComponent(encoder, resolver, meta, {
+      capabilities,
+      attrs,
+      params,
+      hash,
+      synthetic,
+      blocks,
+      layout,
+    });
+    return;
+  }
+
+  encoder.push(Op.Fetch, $s0);
+  encoder.push(Op.Dup, $sp, 1);
+  encoder.push(Op.Load, $s0);
+
+  let { symbols } = symbolTable;
+
+  if (capabilities.createArgs) {
+    encoder.pushMachine(MachineOp.PushFrame);
+    compileArgs(encoder, resolver, meta, null, hash, EMPTY_BLOCKS, synthetic);
+  }
+
+  encoder.push(Op.BeginComponentTransaction);
+
+  if (capabilities.dynamicScope) {
+    encoder.push(Op.PushDynamicScope);
+  }
+
+  if (capabilities.createInstance) {
+    encoder.push(Op.CreateComponent, (blocks.has('default') as any) | 0, $s0);
+  }
+
+  if (capabilities.createArgs) {
+    encoder.pushMachine(MachineOp.PopFrame);
+  }
+
+  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(Op.RegisterComponentDestructor, $s0);
+
+  let bindings: { symbol: number; isBlock: boolean }[] = [];
+
+  encoder.push(Op.GetComponentSelf, $s0);
+  bindings.push({ symbol: 0, isBlock: false });
+
+  for (let i = 0; i < symbols.length; i++) {
+    let symbol = symbols[i];
+
+    switch (symbol.charAt(0)) {
+      case '&':
+        let callerBlock;
+
+        if (symbol === ATTRS_BLOCK) {
+          callerBlock = attrs;
+        } else {
+          callerBlock = blocks.get(symbol.slice(1));
+        }
+
+        if (callerBlock) {
+          pushYieldableBlock(encoder, callerBlock, meta.isEager);
+          bindings.push({ symbol: i + 1, isBlock: true });
+        } else {
+          pushYieldableBlock(encoder, null, meta.isEager);
+          bindings.push({ symbol: i + 1, isBlock: true });
+        }
+
+        break;
+
+      case '@':
+        if (!hash) {
+          break;
+        }
+
+        let [keys, values] = hash;
+        let lookupName = symbol;
+
+        if (synthetic) {
+          lookupName = symbol.slice(1);
+        }
+
+        let index = keys.indexOf(lookupName);
+
+        if (index !== -1) {
+          expr(encoder, resolver, meta, values[index]);
+          bindings.push({ symbol: i + 1, isBlock: false });
+        }
+
+        break;
+    }
+  }
+
+  encoder.push(Op.RootScope, symbols.length + 1, Object.keys(blocks).length > 0 ? 1 : 0);
+
+  for (let i = bindings.length - 1; i >= 0; i--) {
+    let { symbol, isBlock } = bindings[i];
+
+    if (isBlock) {
+      encoder.push(Op.SetBlock, symbol);
+    } else {
+      encoder.push(Op.SetVariable, symbol);
+    }
+  }
+
+  invokeStatic(encoder, layout, meta.isEager);
+
+  if (capabilities.createInstance) {
+    encoder.push(Op.DidRenderLayout, $s0);
+  }
+
+  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(Op.PopScope);
+
+  if (capabilities.dynamicScope) {
+    encoder.push(Op.PopDynamicScope);
+  }
+
+  encoder.push(Op.CommitComponentTransaction);
+  encoder.push(Op.Load, $s0);
+}
+
+export function invokeComponent<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  { capabilities, attrs, params, hash, synthetic, blocks: namedBlocks, layout }: Component
+) {
+  encoder.push(Op.Fetch, $s0);
+  encoder.push(Op.Dup, $sp, 1);
+  encoder.push(Op.Load, $s0);
+
+  encoder.pushMachine(MachineOp.PushFrame);
+
+  let bindableBlocks = !!namedBlocks;
+  let bindableAtNames =
+    capabilities === true || capabilities.prepareArgs || !!(hash && hash[0].length !== 0);
+
+  let blocks = namedBlocks.with('attrs', attrs);
+
+  compileArgs(encoder, resolver, meta, params, hash, blocks, synthetic);
+  encoder.push(Op.PrepareArgs, $s0);
+
+  invokePreparedComponent(encoder, blocks.has('default'), bindableBlocks, bindableAtNames, () => {
+    if (layout) {
+      pushSymbolTable(encoder, layout.symbolTable);
+      pushCompilable(encoder, layout, meta.isEager);
+      resolveCompilable(encoder, meta.isEager);
+    } else {
+      encoder.push(Op.GetComponentLayout, $s0);
+    }
+
+    encoder.push(Op.PopulateLayout, $s0);
+  });
+
+  encoder.push(Op.Load, $s0);
+}
+
 export function invokePreparedComponent(
   encoder: Encoder,
   hasBlock: boolean,
@@ -172,6 +359,23 @@ export function invokeBareComponent(encoder: Encoder) {
   });
 
   encoder.push(Op.Load, $s0);
+}
+
+export function curryComponent<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  { definition, params, hash, synthetic }: CurryComponent
+): void {
+  let referrer = meta.referrer;
+
+  encoder.pushMachine(MachineOp.PushFrame);
+  compileArgs(encoder, resolver, meta, params, hash, EMPTY_BLOCKS, synthetic);
+  encoder.push(Op.CaptureArgs);
+  expr(encoder, resolver, meta, definition);
+  encoder.push(Op.CurryComponent, { type: 'serializable', value: referrer });
+  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(Op.Fetch, $v0);
 }
 
 export function invokeStatic(encoder: Encoder, compilable: CompilableTemplate, isEager: boolean) {
@@ -479,6 +683,126 @@ export function stdAppend(encoder: Encoder, trusting: boolean) {
       encoder.push(Op.AppendNode);
     });
   });
+}
+
+export function staticAttr(
+  encoder: Encoder,
+  _name: string,
+  _namespace: Option<string>,
+  _value: string
+): void {
+  const name = str(_name);
+  const namespace = _namespace ? str(_namespace) : 0;
+
+  if (encoder.isComponentAttrs) {
+    pushPrimitiveReference(encoder, _value);
+    encoder.push(Op.ComponentAttr, name, 1, namespace);
+  } else {
+    let value = str(_value);
+    encoder.push(Op.StaticAttr, name, value, namespace);
+  }
+}
+
+export function startDebugger(encoder: Encoder, symbols: string[], evalInfo: number[]) {
+  encoder.push(Op.Debugger, strArray(symbols), arr(evalInfo));
+}
+
+export function hasBlockParams(encoder: Encoder, isEager: boolean, to: number) {
+  encoder.push(Op.GetBlock, to);
+  resolveCompilable(encoder, isEager);
+  encoder.push(Op.HasBlockParams);
+}
+
+export function expr<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  expression: WireFormat.Expression
+) {
+  if (Array.isArray(expression)) {
+    expressionCompiler().compileExpr(expression, encoder, resolver, meta);
+  } else {
+    primitive(encoder, expression);
+    encoder.push(Op.PrimitiveReference);
+  }
+}
+
+export function compileArgs<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  params: Option<WireFormat.Core.Params>,
+  hash: Option<WireFormat.Core.Hash>,
+  blocks: NamedBlocks,
+  synthetic: boolean
+): void {
+  if (blocks.hasAny) {
+    pushYieldableBlock(encoder, blocks.get('default'), meta.isEager);
+    pushYieldableBlock(encoder, blocks.get('else'), meta.isEager);
+    pushYieldableBlock(encoder, blocks.get('attrs'), meta.isEager);
+  }
+
+  let count = compileParams(encoder, resolver, meta, params);
+
+  let flags = count << 4;
+
+  if (synthetic) flags |= 0b1000;
+
+  if (blocks) {
+    flags |= 0b111;
+  }
+
+  let names: string[] = EMPTY_ARRAY;
+
+  if (hash) {
+    names = hash[0];
+    let val = hash[1];
+    for (let i = 0; i < val.length; i++) {
+      expr(encoder, resolver, meta, val[i]);
+    }
+  }
+
+  encoder.push(Op.PushArgs, { type: 'string-array', value: names }, flags);
+}
+
+export function compileParams<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  params: Option<WireFormat.Core.Params>
+) {
+  if (!params) return 0;
+
+  for (let i = 0; i < params.length; i++) {
+    expr(encoder, resolver, meta, params[i]);
+  }
+
+  return params.length;
+}
+
+export function helper<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  { handle, params, hash }: CompileHelper
+) {
+  encoder.pushMachine(MachineOp.PushFrame);
+  compileArgs(encoder, resolver, meta, params, hash, EMPTY_BLOCKS, true);
+  encoder.push(Op.Helper, { type: 'handle', value: handle });
+  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(Op.Fetch, $v0);
+}
+
+export function modifier<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  meta: ContainingMetadata<Locator>,
+  { handle, params, hash }: CompileHelper
+) {
+  encoder.pushMachine(MachineOp.PushFrame);
+  compileArgs(encoder, resolver, meta, params, hash, EMPTY_BLOCKS, true);
+  encoder.push(Op.Modifier, { type: 'handle', value: handle });
+  encoder.pushMachine(MachineOp.PopFrame);
 }
 
 function sizeImmediate(encoder: Encoder, shifted: number, primitive: BuilderOperand) {
