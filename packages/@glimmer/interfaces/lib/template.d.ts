@@ -71,10 +71,10 @@ export interface ResolvedLayout {
 
 export type MaybeResolvedLayout =
   | {
-      handle: null;
-      capabilities: null;
-      compilable: null;
-    }
+    handle: null;
+    capabilities: null;
+    compilable: null;
+  }
   | ResolvedLayout;
 
 export interface NamedBlocks {
@@ -84,15 +84,50 @@ export interface NamedBlocks {
   hasAny: boolean;
 }
 
-export interface Compiler<Builder = unknown, Locator = unknown> {
-  stdLib: STDLib;
-  constants: CompileTimeConstants;
+export interface ContainingMetadata<Locator> {
+  asPartial: boolean;
+  evalSymbols: Option<string[]>;
+  referrer: Locator;
+  size: number;
+}
 
-  add(statements: Statement[], containingLayout: LayoutWithContext): number;
+export interface CompilationResolver<Locator> {
+  resolveLayoutForTag(tag: string, referrer: Locator): MaybeResolvedLayout;
+  resolveLayoutForHandle(handle: number): ResolvedLayout;
+  resolveHelper(name: string, referrer: Locator): Option<number>;
+  resolveModifier(name: string, referrer: Locator): Option<number>;
+}
+
+export interface BlockCompiler {
+  readonly isEager: boolean;
+
+  // TODO: Needed because it's passed into macros -- make macros not depend
+  // on the builder
+  compileInline(sexp: Statements.Append, builder: Builder): ['expr', Expression] | true;
+
+  compileBlock(
+    name: string,
+    params: Core.Params,
+    hash: Core.Hash,
+    blocks: NamedBlocks,
+
+    // TODO: Needed because it's passed into macros -- make macros not depend
+    // on the builder
+    builder: Builder
+  ): void;
+}
+
+export interface Compiler<Builder = unknown, Locator = unknown>
+  extends CompilationResolver<Locator> {
+  readonly stdLib: STDLib;
+  readonly constants: CompileTimeConstants;
+  readonly isEager: boolean;
+
+  add(statements: Statement[], meta: ContainingMetadata<Locator>): number;
   commit(size: number, encoder: CompilerBuffer): number;
 
   resolveLayoutForTag(tag: string, referrer: Opaque): MaybeResolvedLayout;
-  resolveLayoutForHandle(handle: Locator): ResolvedLayout;
+  resolveLayoutForHandle(handle: number): ResolvedLayout;
   resolveHelper(name: string, referrer: Opaque): Option<number>;
   resolveModifier(name: string, referrer: Opaque): Option<number>;
 
@@ -104,7 +139,7 @@ export interface Compiler<Builder = unknown, Locator = unknown> {
     blocks: NamedBlocks,
     builder: Builder
   ): void;
-  builderFor(containingLayout: LayoutWithContext): Builder;
+  builderFor(meta: ContainingMetadata<Locator>): Builder;
 }
 
 export interface CompilableTemplate<S = SymbolTable> {

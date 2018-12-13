@@ -7,14 +7,17 @@ import {
   Opaque,
   Compiler,
   BlockSymbolTable,
-  BlockWithContext,
+  ContainingMetadata,
 } from '@glimmer/interfaces';
 import { PLACEHOLDER_HANDLE } from './interfaces';
+import { SerializedInlineBlock } from '@glimmer/wire-format';
+import { meta } from './opcode-builder/helpers';
+import OpcodeBuilder from './opcode-builder/interfaces';
 
-export class CompilableProgram implements ICompilableProgram {
+export class CompilableProgram<Locator> implements ICompilableProgram {
   private compiled: Option<number> = null;
 
-  constructor(protected compiler: Compiler<Opaque>, protected layout: LayoutWithContext) {}
+  constructor(protected compiler: Compiler<Opaque>, protected layout: LayoutWithContext<Locator>) {}
 
   get symbolTable(): ProgramSymbolTable {
     return this.layout.block;
@@ -25,21 +28,23 @@ export class CompilableProgram implements ICompilableProgram {
 
     this.compiled = PLACEHOLDER_HANDLE;
 
-    let {
-      block: { statements },
-    } = this.layout;
+    let { layout } = this;
 
-    return (this.compiled = this.compiler.add(statements, this.layout));
+    return (this.compiled = this.compiler.add(layout.block.statements, meta(layout)));
   }
 }
 
-export class CompilableBlock implements CompilableTemplate<BlockSymbolTable> {
+export class CompilableBlock<Locator> implements CompilableTemplate<BlockSymbolTable> {
   private compiled: Option<number> = null;
 
-  constructor(private compiler: Compiler<Opaque>, private parsed: BlockWithContext) {}
+  constructor(
+    private compiler: Compiler<OpcodeBuilder<Locator>, Locator>,
+    private block: SerializedInlineBlock,
+    private meta: ContainingMetadata<Locator>
+  ) {}
 
   get symbolTable(): BlockSymbolTable {
-    return this.parsed.block;
+    return this.block;
   }
 
   compile(): number {
@@ -51,11 +56,6 @@ export class CompilableBlock implements CompilableTemplate<BlockSymbolTable> {
     // be known synchronously and must be linked lazily.
     this.compiled = PLACEHOLDER_HANDLE;
 
-    let {
-      block: { statements },
-      containingLayout,
-    } = this.parsed;
-
-    return (this.compiled = this.compiler.add(statements, containingLayout));
+    return (this.compiled = this.compiler.add(this.block.statements, this.meta));
   }
 }

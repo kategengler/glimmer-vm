@@ -7,6 +7,7 @@ export { compile } from './lib/compile';
 export { AbstractCompiler, AnyAbstractCompiler, debugCompiler } from './lib/compiler';
 
 export { CompilableBlock, CompilableProgram } from './lib/compilable-template';
+export { invokeStaticBlock } from './lib/opcode-builder/helpers';
 
 export {
   LazyOpcodeBuilder,

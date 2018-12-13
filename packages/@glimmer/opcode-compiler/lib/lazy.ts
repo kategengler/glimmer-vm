@@ -5,7 +5,7 @@ import {
   RuntimeResolver,
   Compiler,
   CompileTimeLookup,
-  LayoutWithContext,
+  ContainingMetadata,
 } from '@glimmer/interfaces';
 import { Program, LazyConstants } from '@glimmer/program';
 
@@ -31,7 +31,9 @@ export class LazyCompiler<Locator> extends AbstractCompiler<Locator, LazyOpcodeB
     return new LazyCompiler(macros, program, lookup);
   }
 
-  builderFor(containingLayout: LayoutWithContext<Locator>): LazyOpcodeBuilder<Locator> {
-    return new LazyOpcodeBuilder(this, containingLayout, false);
+  isEager = false;
+
+  builderFor(meta: ContainingMetadata<Locator>): LazyOpcodeBuilder<Locator> {
+    return new LazyOpcodeBuilder<Locator>(this, meta);
   }
 }

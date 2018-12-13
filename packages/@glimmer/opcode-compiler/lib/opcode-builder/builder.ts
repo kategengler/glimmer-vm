@@ -1,5 +1,4 @@
 import {
-  Opaque,
   Option,
   Recast,
   CompilableBlock,
@@ -9,23 +8,14 @@ import {
   Compiler,
   LayoutWithContext,
   NamedBlocks,
+  ContainingMetadata,
 } from '@glimmer/interfaces';
 import { EMPTY_ARRAY } from '@glimmer/util';
-import {
-  Op,
-  $sp,
-  $fp,
-  $s0,
-  $v0,
-  MachineRegister,
-  MachineOp,
-  SavedRegister,
-  $s1,
-} from '@glimmer/vm';
+import { Op, $sp, $s0, $v0, MachineRegister, MachineOp, SavedRegister, $s1 } from '@glimmer/vm';
 import * as WireFormat from '@glimmer/wire-format';
 import { SerializedInlineBlock, Expression } from '@glimmer/wire-format';
 
-import { ComponentArgs } from '../interfaces';
+import { ComponentArgs, ComponentBuilder } from '../interfaces';
 
 import { CompilableBlock as CompilableBlockInstance } from '../compilable-template';
 
@@ -40,30 +30,26 @@ import OpcodeBuilder, {
   ArrayOperand,
   StringArrayOperand,
   CompileBlock,
-  DynamicComponent,
   CompileHelper,
   str,
   Operands,
-  ContainingMetadata,
 } from './interfaces';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { debugCompiler, AnyAbstractCompiler } from '../compiler';
 import { Encoder } from './encoder';
 import {
-  pushCompilable,
   main,
-  resolveCompilable,
   label,
   reserveTarget,
   reserveMachineTarget,
   labels,
-  replayable,
   stdAppend,
-  expr,
   invokeComponent,
   invokeStaticComponent,
   compileArgs,
   yieldBlock,
+  invokeStaticBlock,
+  meta,
 } from './helpers';
 
 export const constant = {
@@ -96,7 +82,7 @@ class StdLib {
   }
 }
 
-export class StdOpcodeBuilder {
+export class StdOpcodeBuilder<Locator> {
   static compileStd(compiler: Compiler): StdLib {
     let mainHandle = StdOpcodeBuilder.build(compiler, b => main(b.encoder));
     let trustingGuardedAppend = StdOpcodeBuilder.build(compiler, b => stdAppend(b.encoder, true));
@@ -104,7 +90,7 @@ export class StdOpcodeBuilder {
     return new StdLib(mainHandle, trustingGuardedAppend, cautiousGuardedAppend);
   }
 
-  static build(compiler: Compiler, callback: (builder: StdOpcodeBuilder) => void): number {
+  static build(compiler: Compiler, callback: (builder: StdOpcodeBuilder<unknown>) => void): number {
     let builder = new StdOpcodeBuilder(compiler);
     callback(builder);
     return builder.commit();
@@ -114,7 +100,7 @@ export class StdOpcodeBuilder {
   readonly encoder: Encoder;
   protected instructionEncoder = new InstructionEncoder([]);
 
-  public compiler: Compiler<this>;
+  public compiler: Compiler<this, Locator>;
 
   constructor(compiler: Compiler, protected size = 0) {
     this.compiler = compiler as Compiler<this>;
@@ -128,12 +114,6 @@ export class StdOpcodeBuilder {
   }
 
   ///
-
-  remoteElement(block: Block): void {
-    this.encoder.push(Op.PushRemoteElement);
-    block(this.encoder);
-    this.encoder.push(Op.PopRemoteElement);
-  }
 
   didRenderLayout() {
     this.encoder.push(Op.DidRenderLayout, $s0);
@@ -163,12 +143,6 @@ export class StdOpcodeBuilder {
 
   // lists
 
-  list(start: string, block: Block): void {
-    reserveTarget(this.encoder, Op.EnterList, start);
-    block(this.encoder);
-    this.encoder.push(Op.ExitList);
-  }
-
   iterate(breaks: string) {
     reserveTarget(this.encoder, Op.Iterate, breaks);
   }
@@ -194,50 +168,28 @@ export class StdOpcodeBuilder {
   jump(target: string) {
     reserveMachineTarget(this.encoder, MachineOp.Jump, target);
   }
-
-  jumpUnless(target: string) {
-    reserveTarget(this.encoder, Op.JumpUnless, target);
-  }
 }
 
-export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuilder
+export abstract class OpcodeBuilderImpl<Locator = unknown> extends StdOpcodeBuilder<Locator>
   implements OpcodeBuilder<Locator> {
   public stdLib: STDLib;
-  public component: ComponentBuilderImpl<Locator> = new ComponentBuilderImpl(this);
-  readonly meta: ContainingMetadata<Locator>;
+  public component: ComponentBuilder = new ComponentBuilderImpl(this);
+  readonly resolver: Compiler<this, Locator>;
 
   abstract isEager: boolean;
 
   constructor(
-    readonly resolver: Compiler,
-    public containingLayout: LayoutWithContext<Locator>,
-    isEager: boolean
+    resolver: Compiler<OpcodeBuilder<Locator>, Locator>,
+    readonly meta: ContainingMetadata<Locator>
   ) {
-    super(resolver, containingLayout ? containingLayout.block.symbols.length : 0);
-
-    this.meta = {
-      asPartial: containingLayout.asPartial,
-      isEager,
-      evalSymbols: evalSymbols(containingLayout),
-      referrer: containingLayout.referrer,
-    };
+    // containingLayout ? containingLayout.block.symbols.length : 0
+    super(resolver, meta.size);
+    this.resolver = resolver as Compiler<this, Locator>;
 
     this.stdLib = resolver.stdLib;
   }
 
-  get asPartial(): boolean {
-    return this.containingLayout.asPartial;
-  }
-
   /// MECHANICS
-
-  get referrer(): Locator {
-    return this.containingLayout && this.containingLayout.referrer;
-  }
-
-  setComponentAttrs(enabled: boolean): void {
-    this.encoder.isComponentAttrs = enabled;
-  }
 
   push(name: Op, ...args: BuilderOperands): void {
     this.encoder.push(name, ...args);
@@ -245,81 +197,6 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
 
   pushMachine(name: MachineOp, ...args: Operands): void {
     this.encoder.pushMachine(name, ...args);
-  }
-
-  invokeDynamicComponent({ definition, attrs, params, hash, synthetic, blocks }: DynamicComponent) {
-    replayable(this.encoder, {
-      args: () => {
-        expr(this.encoder, this.resolver, this.meta, definition);
-        this.encoder.push(Op.Dup, $sp, 0);
-        return 2;
-      },
-
-      body: () => {
-        this.jumpUnless('ELSE');
-
-        this.resolveDynamicComponent(this.containingLayout.referrer);
-
-        this.encoder.push(Op.PushDynamicComponentInstance);
-
-        invokeComponent(this.encoder, this.resolver, this.meta, {
-          capabilities: true,
-          attrs,
-          params,
-          hash,
-          synthetic,
-          blocks,
-        });
-
-        label(this.encoder, 'ELSE');
-      },
-    });
-  }
-
-  yieldz(to: number, params: Option<WireFormat.Core.Params>) {
-    compileArgs(this.encoder, this.resolver, this.meta, params, null, EMPTY_BLOCKS, false);
-    this.encoder.push(Op.GetBlock, to);
-    resolveCompilable(this.encoder, this.isEager);
-    this.encoder.push(Op.InvokeYield);
-    this.encoder.push(Op.PopScope);
-    this.encoder.pushMachine(MachineOp.PopFrame);
-  }
-
-  guardedAppend(expression: WireFormat.Expression, trusting: boolean): void {
-    this.encoder.pushMachine(MachineOp.PushFrame);
-
-    expr(this.encoder, this.resolver, this.meta, expression);
-
-    this.encoder.pushMachine(MachineOp.InvokeStatic, this.stdLib.getAppend(trusting));
-
-    this.encoder.pushMachine(MachineOp.PopFrame);
-  }
-
-  invokeStaticBlock(block: CompilableBlock, callerCount = 0): void {
-    let { parameters } = block.symbolTable;
-    let calleeCount = parameters.length;
-    let count = Math.min(callerCount, calleeCount);
-
-    this.encoder.pushMachine(MachineOp.PushFrame);
-
-    if (count) {
-      this.encoder.push(Op.ChildScope);
-
-      for (let i = 0; i < count; i++) {
-        this.encoder.push(Op.Dup, $fp, callerCount - i);
-        this.encoder.push(Op.SetVariable, parameters[i]);
-      }
-    }
-
-    pushCompilable(this.encoder, block, this.isEager);
-    resolveCompilable(this.encoder, this.isEager);
-    this.encoder.pushMachine(MachineOp.InvokeVirtual);
-
-    if (count) {
-      this.encoder.push(Op.PopScope);
-    }
-
-    this.encoder.pushMachine(MachineOp.PopFrame);
   }
 
   /// CONVENIENCE
@@ -340,16 +217,16 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
       this.encoder.push(Op.PutComponentOperations);
       this.encoder.push(Op.OpenDynamicElement);
       this.encoder.push(Op.DidCreateElement, $s0);
-      yieldBlock(this.encoder, this.resolver, this.meta, attrsBlockNumber, []);
-      this.setComponentAttrs(false);
+      yieldBlock(this.encoder, this.resolver, this.compiler, this.meta, attrsBlockNumber, []);
+      this.encoder.isComponentAttrs = false;
       this.encoder.push(Op.FlushElement);
 
       label(this.encoder, 'BODY');
 
-      this.invokeStaticBlock(blockFor(layout, this.compiler));
+      invokeStaticBlock(this.encoder, this.compiler, blockFor(layout, this.compiler));
 
       this.encoder.push(Op.Fetch, $s1);
-      this.jumpUnless('END');
+      reserveTarget(this.encoder, Op.JumpUnless, 'END');
       this.encoder.push(Op.CloseElement);
 
       label(this.encoder, 'END');
@@ -372,8 +249,8 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
       let { capabilities, compilable } = this.compiler.resolveLayoutForHandle(handle);
 
       if (compilable) {
-        this.pushComponentDefinition(handle);
-        invokeStaticComponent(this.encoder, this.resolver, this.meta, {
+        this.encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
+        invokeStaticComponent(this.encoder, this.resolver, this.compiler, this.meta, {
           capabilities,
           layout: compilable,
           attrs: null,
@@ -383,8 +260,8 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
           blocks,
         });
       } else {
-        this.pushComponentDefinition(handle);
-        invokeComponent(this.encoder, this.resolver, this.meta, {
+        this.encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
+        invokeComponent(this.encoder, this.resolver, this.compiler, this.meta, {
           capabilities,
           attrs: null,
           params,
@@ -398,10 +275,6 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
 
   // components
 
-  protected pushComponentDefinition(handle: number) {
-    this.encoder.push(Op.PushComponentDefinition, this.constants.handle(handle));
-  }
-
   protected resolveDynamicComponent(referrer: Locator) {
     this.encoder.push(Op.ResolveDynamicComponent, this.constants.serializable(referrer));
   }
@@ -413,7 +286,7 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
   ): boolean {
     let { handle, capabilities, compilable } = this.compiler.resolveLayoutForTag(
       tag,
-      this.referrer
+      this.meta.referrer
     );
 
     if (handle !== null && capabilities !== null) {
@@ -424,8 +297,8 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
           }
         }
 
-        this.pushComponentDefinition(handle);
-        invokeStaticComponent(this.encoder, this.resolver, this.meta, {
+        this.encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
+        invokeStaticComponent(this.encoder, this.resolver, this.compiler, this.meta, {
           capabilities,
           layout: compilable,
           attrs: null,
@@ -443,14 +316,6 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
   }
 
   // partial
-
-  invokePartial(referrer: Locator, symbols: string[], evalInfo: number[]) {
-    let _meta = this.constants.serializable(referrer);
-    let _symbols = this.constants.stringArray(symbols);
-    let _evalInfo = this.constants.array(evalInfo);
-
-    this.encoder.push(Op.InvokePartial, _meta, _symbols, _evalInfo);
-  }
 
   protected resolveMaybeLocal(name: string) {
     this.encoder.push(Op.ResolveMaybeLocal, str(name));
@@ -490,8 +355,17 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
 
   helper({ handle, params, hash }: CompileHelper) {
     this.encoder.pushMachine(MachineOp.PushFrame);
-    compileArgs(this.encoder, this.resolver, this.meta, params, hash, EMPTY_BLOCKS, true);
-    this.encoder.push(Op.Helper, this.constants.handle(handle));
+    compileArgs(
+      this.encoder,
+      this.resolver,
+      this.compiler,
+      this.meta,
+      params,
+      hash,
+      EMPTY_BLOCKS,
+      true
+    );
+    this.encoder.push(Op.Helper, { type: 'handle', value: handle });
     this.encoder.pushMachine(MachineOp.PopFrame);
     this.encoder.push(Op.Fetch, $v0);
   }
@@ -503,28 +377,7 @@ export abstract class OpcodeBuilderImpl<Locator = Opaque> extends StdOpcodeBuild
   // convenience methods
 
   inlineBlock(block: SerializedInlineBlock): CompilableBlock {
-    return new CompilableBlockInstance(this.compiler, {
-      block,
-      containingLayout: this.containingLayout,
-    });
-  }
-
-  get evalSymbols(): Option<string[]> {
-    let {
-      containingLayout: { block },
-    } = this;
-
-    return block.hasEval ? block.symbols : null;
-  }
-
-  params(params: Option<WireFormat.Core.Params>) {
-    if (!params) return 0;
-
-    for (let i = 0; i < params.length; i++) {
-      expr(this.encoder, this.resolver, this.meta, params[i]);
-    }
-
-    return params.length;
+    return new CompilableBlockInstance(this.compiler, block, this.meta);
   }
 
   templates(blocks: WireFormat.Core.Blocks): NamedBlocks {
@@ -552,17 +405,10 @@ function blockFor<Locator>(
   layout: LayoutWithContext,
   compiler: Compiler<OpcodeBuilder<Locator>>
 ): CompilableBlock {
-  return new CompilableBlockInstance(compiler, {
-    block: {
-      statements: layout.block.statements,
-      parameters: EMPTY_ARRAY,
-    },
-    containingLayout: layout,
-  });
-}
+  let block = {
+    statements: layout.block.statements,
+    parameters: EMPTY_ARRAY,
+  };
 
-function evalSymbols(layout: LayoutWithContext<unknown>): Option<string[]> {
-  let { block } = layout;
-
-  return block.hasEval ? block.symbols : null;
+  return new CompilableBlockInstance(compiler, block, meta(layout));
 }

@@ -2,6 +2,7 @@ import { Macros } from '@glimmer/opcode-compiler';
 import { Option } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 import { EMPTY_BLOCKS } from '@glimmer/opcode-compiler';
+import { invokeStaticBlock } from '@glimmer/opcode-compiler';
 
 export default class TestMacros extends Macros {
   constructor() {
@@ -10,11 +11,11 @@ export default class TestMacros extends Macros {
     let { blocks, inlines } = this;
 
     blocks.add('identity', (_params, _hash, blocks, builder) => {
-      builder.invokeStaticBlock(blocks.get('default')!);
+      invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('default')!);
     });
 
     blocks.add('render-else', (_params, _hash, blocks, builder) => {
-      builder.invokeStaticBlock(blocks.get('else')!);
+      invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
     });
 
     blocks.addMissing((name, params, hash, blocks, builder) => {
@@ -22,7 +23,7 @@ export default class TestMacros extends Macros {
         params = [];
       }
 
-      let { handle } = builder.resolver.resolveLayoutForTag(name, builder.referrer);
+      let { handle } = builder.resolver.resolveLayoutForTag(name, builder.meta.referrer);
 
       if (handle !== null) {
         builder.component.static(handle, [params, hashToArgs(hash), blocks]);
@@ -33,7 +34,7 @@ export default class TestMacros extends Macros {
     });
 
     inlines.addMissing((name, params, hash, builder) => {
-      let { handle } = builder.resolver.resolveLayoutForTag(name, builder.referrer);
+      let { handle } = builder.resolver.resolveLayoutForTag(name, builder.meta.referrer);
 
       if (handle !== null) {
         builder.component.static(handle, [params!, hashToArgs(hash), EMPTY_BLOCKS]);

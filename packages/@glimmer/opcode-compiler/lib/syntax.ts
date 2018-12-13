@@ -1,13 +1,16 @@
-import { Option, Opaque, Compiler, NamedBlocks as INamedBlocks } from '@glimmer/interfaces';
+import {
+  Option,
+  Opaque,
+  Compiler,
+  NamedBlocks as INamedBlocks,
+  CompilationResolver,
+  ContainingMetadata,
+} from '@glimmer/interfaces';
 import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
 import { $fp, Op, $s0, MachineOp, $sp } from '@glimmer/vm';
 import * as WireFormat from '@glimmer/wire-format';
 import * as ClientSide from './client-side';
-import OpcodeBuilder, {
-  str,
-  CompilationResolver,
-  ContainingMetadata,
-} from './opcode-builder/interfaces';
+import OpcodeBuilder, { str } from './opcode-builder/interfaces';
 
 import Ops = WireFormat.Ops;
 import S = WireFormat.Statements;
@@ -32,6 +35,14 @@ import {
   invokeComponent,
   invokeStaticComponent,
   yieldBlock,
+  guardedAppend,
+  invokeStaticBlock,
+  remoteElement,
+  invokeDynamicComponent,
+  reserveTarget,
+  list,
+  invokePartial,
+  params,
 } from './opcode-builder/helpers';
 import { Encoder } from './opcode-builder/encoder';
 
@@ -41,13 +52,17 @@ export type NewCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler,
+  meta: ContainingMetadata<Locator>
+) => void);
+export type LeafCompilerFunction<T extends TupleSyntax, Locator> = ((
+  sexp: T,
+  encoder: Encoder,
   meta: ContainingMetadata<Locator>
 ) => void);
 export type RegisteredSyntax<T extends TupleSyntax, Locator> =
-  | {
-      type: 'full';
-      f: CompilerFunction<T>;
-    }
+  | { type: 'full'; f: CompilerFunction<T> }
+  | { type: 'leaf'; f: LeafCompilerFunction<T, Locator> }
   | { type: 'mini'; f: NewCompilerFunction<T, Locator> };
 
 export const ATTRS_BLOCK = '&attrs';
@@ -68,10 +83,16 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     this.names[name] = this.funcs.length - 1;
   }
 
-  compileExpr(
-    sexp: WireFormat.Expression,
+  addLeaf<T extends Syntax>(name: number, func: LeafCompilerFunction<T, Locator>): void {
+    this.funcs.push({ type: 'leaf', f: func as LeafCompilerFunction<Syntax, Locator> });
+    this.names[name] = this.funcs.length - 1;
+  }
+
+  compileSimple(
+    sexp: Syntax,
     encoder: Encoder,
     resolver: CompilationResolver<Locator>,
+    compiler: Compiler<unknown, Locator>,
     meta: ContainingMetadata<Locator>
   ): void {
     let name: number = sexp![this.offset];
@@ -88,7 +109,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
       throw new Error('Expressions must be compiled in the new style');
     }
 
-    func.f(sexp as Syntax, encoder, resolver, meta);
+    func.f(sexp as Syntax, encoder, resolver, compiler, meta);
   }
 
   compile(sexp: Syntax, builder: OpcodeBuilder<Locator>): void {
@@ -102,8 +123,10 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
 
     if (func.type === 'full') {
       func.f(sexp, builder);
+    } else if (func.type === 'leaf') {
+      func.f(sexp, builder.encoder, builder.meta);
     } else {
-      func.f(sexp, builder.encoder, builder.resolver, builder.meta);
+      func.f(sexp, builder.encoder, builder.resolver, builder.compiler, builder.meta);
     }
   }
 }
@@ -117,30 +140,30 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
   const STATEMENTS = (_statementCompiler = new Compilers<WireFormat.Statement, unknown>());
 
-  STATEMENTS.addSimple(Ops.Text, (sexp: S.Text, encoder) => {
+  STATEMENTS.addLeaf(Ops.Text, (sexp: S.Text, encoder) => {
     encoder.push(Op.Text, { type: 'string', value: sexp[1] });
   });
 
-  STATEMENTS.addSimple(Ops.Comment, (sexp: S.Comment, encoder) => {
+  STATEMENTS.addLeaf(Ops.Comment, (sexp: S.Comment, encoder) => {
     encoder.push(Op.Comment, { type: 'string', value: sexp[1] });
   });
 
-  STATEMENTS.addSimple(Ops.CloseElement, (_sexp, encoder) => {
+  STATEMENTS.addLeaf(Ops.CloseElement, (_sexp, encoder) => {
     encoder.push(Op.CloseElement);
   });
 
-  STATEMENTS.addSimple(Ops.FlushElement, (_sexp, encoder) => {
+  STATEMENTS.addLeaf(Ops.FlushElement, (_sexp, encoder) => {
     encoder.push(Op.FlushElement);
   });
 
-  STATEMENTS.add(Ops.Modifier, (sexp: S.Modifier, builder) => {
-    let { referrer } = builder;
+  STATEMENTS.addSimple(Ops.Modifier, (sexp: S.Modifier, encoder, resolver, compiler, meta) => {
+    let { referrer } = meta;
     let [, name, params, hash] = sexp;
 
-    let handle = builder.resolver.resolveModifier(name, referrer);
+    let handle = resolver.resolveModifier(name, referrer);
 
     if (handle !== null) {
-      modifier(builder.encoder, builder.resolver, builder.meta, { handle, params, hash });
+      modifier(encoder, resolver, compiler, meta, { handle, params, hash });
     } else {
       throw new Error(
         `Compile Error ${name} is not a modifier: Helpers may not be used in the element form.`
@@ -148,24 +171,30 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   });
 
-  STATEMENTS.addSimple(Ops.StaticAttr, (sexp: S.StaticAttr, encoder) => {
+  STATEMENTS.addLeaf(Ops.StaticAttr, (sexp: S.StaticAttr, encoder) => {
     let [, name, value, namespace] = sexp;
     staticAttr(encoder, name, namespace, value as string);
   });
 
-  STATEMENTS.add(Ops.DynamicAttr, (sexp: S.DynamicAttr, builder) => {
-    dynamicAttr(sexp, false, builder);
-  });
+  STATEMENTS.addSimple(
+    Ops.DynamicAttr,
+    (sexp: S.DynamicAttr, encoder, resolver, compiler, meta) => {
+      dynamicAttr(encoder, resolver, compiler, meta, sexp, false);
+    }
+  );
 
-  STATEMENTS.add(Ops.TrustingAttr, (sexp: S.DynamicAttr, builder) => {
-    dynamicAttr(sexp, true, builder);
-  });
+  STATEMENTS.addSimple(
+    Ops.TrustingAttr,
+    (sexp: S.DynamicAttr, encoder, resolver, compiler, meta) => {
+      dynamicAttr(encoder, resolver, compiler, meta, sexp, true);
+    }
+  );
 
-  STATEMENTS.addSimple(Ops.OpenElement, (sexp: S.OpenElement, encoder) => {
+  STATEMENTS.addLeaf(Ops.OpenElement, (sexp: S.OpenElement, encoder) => {
     encoder.push(Op.OpenElement, str(sexp[1]));
   });
 
-  STATEMENTS.addSimple(Ops.OpenSplattedElement, (sexp: S.SplatElement, encoder) => {
+  STATEMENTS.addLeaf(Ops.OpenSplattedElement, (sexp: S.SplatElement, encoder) => {
     encoder.isComponentAttrs = true;
     encoder.push(Op.PutComponentOperations);
     encoder.push(Op.OpenElement, str(sexp[1]));
@@ -185,7 +214,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
       attrsBlock = builder.inlineBlock({ statements: wrappedAttrs, parameters: EMPTY_ARRAY });
     }
 
-    builder.invokeDynamicComponent({
+    invokeDynamicComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
       definition,
       attrs: attrsBlock,
       params: null,
@@ -197,7 +226,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
   STATEMENTS.add(Ops.Component, (sexp: S.Component, builder) => {
     let [, tag, _attrs, args, blocks] = sexp;
-    let { referrer } = builder;
+    let { referrer } = builder.meta;
 
     let { handle, capabilities, compilable } = builder.resolver.resolveLayoutForTag(tag, referrer);
 
@@ -211,7 +240,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
       if (compilable) {
         builder.push(Op.PushComponentDefinition, constant.handle(handle));
-        invokeStaticComponent(builder.encoder, builder.resolver, builder.meta, {
+        invokeStaticComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
           capabilities,
           layout: compilable,
           attrs: attrsBlock,
@@ -222,7 +251,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
         });
       } else {
         builder.push(Op.PushComponentDefinition, constant.handle(handle));
-        invokeComponent(builder.encoder, builder.resolver, builder.meta, {
+        invokeComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
           capabilities,
           attrs: attrsBlock,
           params: null,
@@ -236,114 +265,156 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   });
 
-  STATEMENTS.add(Ops.Partial, (sexp: S.Partial, builder) => {
+  STATEMENTS.addSimple(Ops.Partial, (sexp: S.Partial, encoder, resolver, compiler, meta) => {
     let [, name, evalInfo] = sexp;
 
-    let { referrer } = builder;
+    let { referrer } = meta;
 
-    replayableIf(builder.encoder, {
+    replayableIf(encoder, {
       args() {
-        expr(builder.encoder, builder.resolver, builder.meta, name);
-        builder.push(Op.Dup, $sp, 0);
+        expr(encoder, resolver, compiler, meta, name);
+        encoder.push(Op.Dup, $sp, 0);
         return 2;
       },
 
       ifTrue() {
-        builder.invokePartial(referrer, builder.meta.evalSymbols!, evalInfo);
-        builder.push(Op.PopScope);
-        builder.pushMachine(MachineOp.PopFrame);
+        invokePartial(encoder, referrer, meta.evalSymbols!, evalInfo);
+        encoder.push(Op.PopScope);
+        encoder.pushMachine(MachineOp.PopFrame);
       },
     });
   });
 
-  STATEMENTS.addSimple(Ops.Yield, (sexp: WireFormat.Statements.Yield, encoder, resolver, meta) => {
-    let [, to, params] = sexp;
+  STATEMENTS.addSimple(
+    Ops.Yield,
+    (sexp: WireFormat.Statements.Yield, encoder, resolver, compiler, meta) => {
+      let [, to, params] = sexp;
 
-    yieldBlock(encoder, resolver, meta, to, params);
-  });
+      yieldBlock(encoder, resolver, compiler, meta, to, params);
+    }
+  );
 
   STATEMENTS.addSimple(
     Ops.AttrSplat,
-    (sexp: WireFormat.Statements.AttrSplat, encoder, resolver, meta) => {
+    (sexp: WireFormat.Statements.AttrSplat, encoder, resolver, compiler, meta) => {
       let [, to] = sexp;
 
-      yieldBlock(encoder, resolver, meta, to, []);
+      yieldBlock(encoder, resolver, compiler, meta, to, []);
       encoder.isComponentAttrs = false;
     }
   );
 
-  STATEMENTS.add(Ops.Debugger, (sexp: WireFormat.Statements.Debugger, builder) => {
-    let [, evalInfo] = sexp;
+  STATEMENTS.addSimple(
+    Ops.Debugger,
+    (sexp: WireFormat.Statements.Debugger, encoder, _resolver, _compiler, meta) => {
+      let [, evalInfo] = sexp;
 
-    startDebugger(builder.encoder, builder.meta.evalSymbols!, evalInfo);
-  });
+      startDebugger(encoder, meta.evalSymbols!, evalInfo);
+    }
+  );
 
-  STATEMENTS.add(Ops.ClientSideStatement, (sexp: WireFormat.Statements.ClientSide, builder) => {
-    CLIENT_SIDE.compile(sexp as ClientSide.ClientSideStatement, builder);
-  });
+  STATEMENTS.addSimple(
+    Ops.ClientSideStatement,
+    (sexp: WireFormat.Statements.ClientSide, encoder, resolver, compiler, meta) => {
+      CLIENT_SIDE.compileSimple(
+        sexp as ClientSide.ClientSideStatement,
+        encoder,
+        resolver,
+        compiler,
+        meta
+      );
+    }
+  );
 
   STATEMENTS.add(Ops.Append, (sexp: S.Append, builder) => {
     let [, value, trusting] = sexp;
 
-    let returned = builder.compileInline(sexp) || value;
+    let returned = builder.compiler.compileInline(sexp, builder) || value;
 
     if (returned === true) return;
 
-    builder.guardedAppend(value, trusting);
+    guardedAppend(
+      builder.encoder,
+      builder.resolver,
+      builder.compiler,
+      builder.meta,
+      builder.stdLib,
+      value,
+      trusting
+    );
   });
 
   STATEMENTS.add(Ops.Block, (sexp: S.Block, builder) => {
     let [, name, params, hash, named] = sexp;
 
-    builder.compileBlock({ name, params, hash, blocks: builder.templates(named) });
+    builder.compiler.compileBlock(name, params, hash, builder.templates(named), builder);
   });
 
   const CLIENT_SIDE = new Compilers<ClientSide.ClientSideStatement, unknown>(1);
 
-  CLIENT_SIDE.add(
+  CLIENT_SIDE.addSimple(
     ClientSide.Ops.OpenComponentElement,
-    (sexp: ClientSide.OpenComponentElement, builder) => {
-      builder.push(Op.PutComponentOperations);
-      builder.push(Op.OpenElement, constant.string(sexp[2]));
+    (sexp: ClientSide.OpenComponentElement, encoder) => {
+      encoder.push(Op.PutComponentOperations);
+      encoder.push(Op.OpenElement, constant.string(sexp[2]));
     }
   );
 
-  CLIENT_SIDE.add(ClientSide.Ops.DidCreateElement, (_sexp, builder) => {
-    builder.push(Op.DidCreateElement, $s0);
+  CLIENT_SIDE.addSimple(ClientSide.Ops.DidCreateElement, (_sexp, encoder) => {
+    encoder.push(Op.DidCreateElement, $s0);
   });
 
-  CLIENT_SIDE.add(
+  CLIENT_SIDE.addSimple(
     ClientSide.Ops.SetComponentAttrs,
-    (sexp: ClientSide.SetComponentAttrs, builder) => {
-      builder.setComponentAttrs(sexp[2]);
+    (sexp: ClientSide.SetComponentAttrs, encoder) => {
+      encoder.isComponentAttrs = sexp[2];
     }
   );
 
-  CLIENT_SIDE.add(ClientSide.Ops.Debugger, () => {
+  CLIENT_SIDE.addSimple(ClientSide.Ops.Debugger, () => {
     // tslint:disable-next-line:no-debugger
     debugger;
   });
 
-  CLIENT_SIDE.add(ClientSide.Ops.DidRenderLayout, (_sexp, builder) => {
-    builder.push(Op.DidRenderLayout, $s0);
+  CLIENT_SIDE.addSimple(ClientSide.Ops.DidRenderLayout, (_sexp, encoder) => {
+    encoder.push(Op.DidRenderLayout, $s0);
   });
 
   return STATEMENTS;
 }
 
 function dynamicAttr<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
+  meta: ContainingMetadata<Locator>,
   sexp: S.DynamicAttr | S.TrustingAttr,
-  trusting: boolean,
-  builder: OpcodeBuilder<Locator>
+  trusting: boolean
 ) {
   let [, name, value, namespace] = sexp;
 
-  expr(builder.encoder, builder.resolver, builder.meta, value);
+  expr(encoder, resolver, compiler, meta, value);
 
   if (namespace) {
-    builder.dynamicAttr(name, namespace, trusting);
+    finishDynamicAttr(encoder, name, namespace, trusting);
   } else {
-    builder.dynamicAttr(name, null, trusting);
+    finishDynamicAttr(encoder, name, null, trusting);
+  }
+}
+
+export function finishDynamicAttr(
+  encoder: Encoder,
+  _name: string,
+  _namespace: Option<string>,
+  trusting: boolean
+) {
+  let name = str(_name);
+  let namespace = _namespace ? str(_namespace) : 0;
+
+  if (encoder.isComponentAttrs) {
+    encoder.push(Op.ComponentAttr, name, trusting === true ? 1 : 0, namespace);
+  } else {
+    encoder.push(Op.DynamicAttr, name, trusting === true ? 1 : 0, namespace);
   }
 }
 
@@ -356,13 +427,13 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
 
   const EXPRESSIONS = (_expressionCompiler = new Compilers<WireFormat.TupleExpression>());
 
-  EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, encoder, resolver, meta) => {
+  EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, encoder, resolver, compiler, meta) => {
     let name = sexp[1];
 
     let handle = resolver.resolveHelper(name, meta.referrer);
 
     if (handle !== null) {
-      helper(encoder, resolver, meta, { handle, params: null, hash: null });
+      helper(encoder, resolver, compiler, meta, { handle, params: null, hash: null });
     } else if (meta.asPartial) {
       encoder.push(Op.ResolveMaybeLocal, constant.string(name));
     } else {
@@ -371,15 +442,15 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
     }
   });
 
-  EXPRESSIONS.addSimple(Ops.Concat, (sexp: E.Concat, encoder, resolver, meta) => {
+  EXPRESSIONS.addSimple(Ops.Concat, (sexp: E.Concat, encoder, resolver, compiler, meta) => {
     let parts = sexp[1];
     for (let i = 0; i < parts.length; i++) {
-      expr(encoder, resolver, meta, parts[i]);
+      expr(encoder, resolver, compiler, meta, parts[i]);
     }
     encoder.push(Op.Concat, parts.length);
   });
 
-  EXPRESSIONS.addSimple(Ops.Helper, (sexp: E.Helper, encoder, resolver, meta) => {
+  EXPRESSIONS.addSimple(Ops.Helper, (sexp: E.Helper, encoder, resolver, compiler, meta) => {
     let [, name, params, hash] = sexp;
 
     // TODO: triage this in the WF compiler
@@ -387,7 +458,7 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
       assert(params.length, 'SYNTAX ERROR: component helper requires at least one argument');
 
       let [definition, ...restArgs] = params;
-      curryComponent(encoder, resolver, meta, {
+      curryComponent(encoder, resolver, compiler, meta, {
         definition,
         params: restArgs,
         hash,
@@ -399,7 +470,7 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
     let handle = resolver.resolveHelper(name, meta.referrer);
 
     if (handle !== null) {
-      helper(encoder, resolver, meta, { handle, params, hash });
+      helper(encoder, resolver, compiler, meta, { handle, params, hash });
     } else {
       throw new Error(`Compile Error: ${name} is not a helper`);
     }
@@ -413,22 +484,25 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
     }
   });
 
-  EXPRESSIONS.addSimple(Ops.MaybeLocal, (sexp: E.MaybeLocal, encoder, _resolver, meta) => {
-    let [, path] = sexp;
+  EXPRESSIONS.addSimple(
+    Ops.MaybeLocal,
+    (sexp: E.MaybeLocal, encoder, _resolver, _compiler, meta) => {
+      let [, path] = sexp;
 
-    if (meta.asPartial) {
-      let head = path[0];
-      path = path.slice(1);
+      if (meta.asPartial) {
+        let head = path[0];
+        path = path.slice(1);
 
-      encoder.push(Op.ResolveMaybeLocal, constant.string(head));
-    } else {
-      encoder.push(Op.GetVariable, 0);
+        encoder.push(Op.ResolveMaybeLocal, constant.string(head));
+      } else {
+        encoder.push(Op.GetVariable, 0);
+      }
+
+      for (let i = 0; i < path.length; i++) {
+        encoder.push(Op.GetProperty, constant.string(path[i]));
+      }
     }
-
-    for (let i = 0; i < path.length; i++) {
-      encoder.push(Op.GetProperty, constant.string(path[i]));
-    }
-  });
+  );
 
   EXPRESSIONS.addSimple(Ops.Undefined, (_sexp, encoder) => {
     return pushPrimitiveReference(encoder, undefined);
@@ -438,9 +512,12 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
     encoder.push(Op.HasBlock, sexp[1]);
   });
 
-  EXPRESSIONS.addSimple(Ops.HasBlockParams, (sexp: E.HasBlockParams, encoder, _resolver, meta) => {
-    hasBlockParams(encoder, meta.isEager, sexp[1]);
-  });
+  EXPRESSIONS.addSimple(
+    Ops.HasBlockParams,
+    (sexp: E.HasBlockParams, encoder, _resolver, compiler, _meta) => {
+      hasBlockParams(encoder, compiler.isEager, sexp[1]);
+    }
+  );
 
   return EXPRESSIONS;
 }
@@ -594,18 +671,18 @@ export function populateBuiltins(
 
     replayableIf(builder.encoder, {
       args() {
-        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
+        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
         builder.toBoolean();
         return 1;
       },
 
       ifTrue() {
-        builder.invokeStaticBlock(unwrap(blocks.get('default')));
+        invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')));
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          builder.invokeStaticBlock(blocks.get('else')!);
+          invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
         }
       },
     });
@@ -630,19 +707,19 @@ export function populateBuiltins(
 
     replayableIf(builder.encoder, {
       args() {
-        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
+        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
         builder.toBoolean();
         return 1;
       },
 
       ifTrue() {
         if (blocks.has('else')) {
-          builder.invokeStaticBlock(blocks.get('else')!);
+          invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
         }
       },
 
       ifFalse() {
-        builder.invokeStaticBlock(unwrap(blocks.get('default')));
+        invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')));
       },
     });
   });
@@ -666,19 +743,19 @@ export function populateBuiltins(
 
     replayableIf(builder.encoder, {
       args() {
-        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
+        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
         builder.push(Op.Dup, $sp, 0);
         builder.toBoolean();
         return 2;
       },
 
       ifTrue() {
-        builder.invokeStaticBlock(unwrap(blocks.get('default')), 1);
+        invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')), 1);
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          builder.invokeStaticBlock(blocks.get('else')!);
+          invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
         }
       },
     });
@@ -711,12 +788,12 @@ export function populateBuiltins(
     replayable(builder.encoder, {
       args() {
         if (hash && hash[0][0] === 'key') {
-          expr(builder.encoder, builder.resolver, builder.meta, hash[1][0]);
+          expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, hash[1][0]);
         } else {
           pushPrimitiveReference(builder.encoder, null);
         }
 
-        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
+        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
 
         return 2;
       },
@@ -724,18 +801,18 @@ export function populateBuiltins(
       body() {
         builder.push(Op.PutIterator);
 
-        builder.jumpUnless('ELSE');
+        reserveTarget(builder.encoder, Op.JumpUnless, 'ELSE');
 
         builder.frame(() => {
           builder.push(Op.Dup, $fp, 1);
 
           reserveMachineTarget(builder.encoder, MachineOp.ReturnTo, 'ITER');
-          builder.list('BODY', () => {
+          list(builder.encoder, 'BODY', () => {
             label(builder.encoder, 'ITER');
             builder.iterate('BREAK');
 
             label(builder.encoder, 'BODY');
-            builder.invokeStaticBlock(unwrap(blocks.get('default')), 2);
+            invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')), 2);
             builder.pop(2);
             builder.jump('FINALLY');
 
@@ -747,7 +824,7 @@ export function populateBuiltins(
         label(builder.encoder, 'ELSE');
 
         if (blocks.has('else')) {
-          builder.invokeStaticBlock(blocks.get('else')!);
+          invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
         }
       },
     });
@@ -765,13 +842,13 @@ export function populateBuiltins(
         for (let i = 0; i < keys.length; i++) {
           let key = keys[i];
           if (key === 'nextSibling' || key === 'guid') {
-            expr(builder.encoder, builder.resolver, builder.meta, values[i]);
+            expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, values[i]);
           } else {
             throw new Error(`SYNTAX ERROR: #in-element does not take a \`${keys[0]}\` option`);
           }
         }
 
-        expr(builder.encoder, builder.resolver, builder.meta, params[0]);
+        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
 
         builder.push(Op.Dup, $sp, 0);
 
@@ -779,7 +856,9 @@ export function populateBuiltins(
       },
 
       ifTrue() {
-        builder.remoteElement(() => builder.invokeStaticBlock(unwrap(blocks.get('default'))));
+        remoteElement(builder.encoder, () =>
+          invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')))
+        );
       },
     });
   });
@@ -788,13 +867,13 @@ export function populateBuiltins(
     if (hash) {
       let [names, expressions] = hash;
 
-      builder.params(expressions);
+      params(builder.encoder, builder.resolver, builder.compiler, builder.meta, expressions);
 
       dynamicScope(builder.encoder, names, () => {
-        builder.invokeStaticBlock(unwrap(blocks.get('default')));
+        invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')));
       });
     } else {
-      builder.invokeStaticBlock(unwrap(blocks.get('default')));
+      invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')));
     }
   });
 
@@ -812,7 +891,7 @@ export function populateBuiltins(
     }
 
     let [definition, ...params] = _params!;
-    builder.invokeDynamicComponent({
+    invokeDynamicComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
       definition,
       attrs: null,
       params,
@@ -835,7 +914,7 @@ export function populateBuiltins(
     }
 
     let [definition, ...params] = _params!;
-    builder.invokeDynamicComponent({
+    invokeDynamicComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
       definition,
       attrs: null,
       params,

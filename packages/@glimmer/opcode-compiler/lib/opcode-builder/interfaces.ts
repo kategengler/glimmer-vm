@@ -5,13 +5,15 @@ import {
   Option,
   CompilableBlock,
   NamedBlocks,
-  MaybeResolvedLayout,
   ComponentCapabilities,
   CompilableProgram,
+  STDLib,
+  CompilationResolver,
+  ContainingMetadata,
 } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 
-import { ComponentArgs } from '../interfaces';
+import { ComponentArgs, ComponentBuilder } from '../interfaces';
 import { SavedRegister, Op, MachineOp } from '@glimmer/vm';
 import { SerializedInlineBlock, Statements, Core, Expression } from '@glimmer/wire-format';
 import { Operand } from '@glimmer/encoder';
@@ -89,16 +91,6 @@ export interface CompileHelper {
   hash: Core.Hash;
 }
 
-export interface CompilationResolver<Locator> {
-  resolveLayoutForTag(tag: string, referrer: Locator): MaybeResolvedLayout;
-  resolveHelper(name: string, referrer: Locator): Option<number>;
-  resolveModifier(name: string, referrer: Locator): Option<number>;
-}
-
-export interface ComponentBuilder {
-  static(handle: number, args: ComponentArgs): void;
-}
-
 export interface StringOperand {
   readonly type: 'string';
   readonly value: string;
@@ -161,6 +153,10 @@ export interface SerializableOperand {
   value: unknown;
 }
 
+export function serializable(value: unknown): SerializableOperand {
+  return { type: 'serializable', value };
+}
+
 export interface OtherOperand {
   type: 'other';
   value: unknown;
@@ -185,28 +181,18 @@ export type BuilderOperands =
 
 export type Operands = [] | [Operand] | [Operand, Operand] | [Operand, Operand, Operand];
 
-export interface ContainingMetadata<Locator> {
-  asPartial: boolean;
-  isEager: boolean;
-  evalSymbols: Option<string[]>;
-  referrer: Locator;
-}
-
 export default interface OpcodeBuilder<Locator = unknown> {
   readonly resolver: CompilationResolver<Locator>;
   readonly component: ComponentBuilder;
+  readonly compiler: Compiler<this, Locator>;
   readonly encoder: Encoder;
-  readonly referrer: Locator;
   readonly meta: ContainingMetadata<Locator>;
+  readonly stdLib: STDLib;
 
   push(name: Op, ...args: BuilderOperands): void;
   pushMachine(name: MachineOp, ...args: Operands): void;
 
   frame(options: Block): void;
-
-  params(expression: WireFormat.Expression[]): void;
-
-  invokeStaticBlock(block: CompilableBlock, callerCount?: number): void;
 
   toBoolean(): void;
 
@@ -214,16 +200,11 @@ export default interface OpcodeBuilder<Locator = unknown> {
 
   withSavedRegister(register: SavedRegister, block: Block): void;
 
-  list(label: string, block: Block): void;
   iterate(label: string): void;
 
   jump(label: string): void;
-  jumpUnless(label: string): void;
 
-  remoteElement(block: Block): void;
   dynamicAttr(name: string, namespace: Option<string>, trusting: boolean): void;
-
-  guardedAppend(expression: Expression, trusting: boolean): void;
 
   bindDynamicScope(names: string[]): void;
 
@@ -233,12 +214,8 @@ export default interface OpcodeBuilder<Locator = unknown> {
     template: Option<CompilableBlock>
   ): boolean;
 
-  invokeDynamicComponent(options: DynamicComponent): void;
   wrappedComponent(layout: LayoutWithContext<Locator>, attrsBlockNumber: number): number;
   staticComponent(handle: number, args: ComponentArgs): void;
-
-  // eval
-  invokePartial(referrer: Locator, symbols: string[], evalInfo: number[]): void;
 
   // TODO: These don't seem like the right abstraction, but leaving
   // them for now in the interest of expedience.
@@ -247,5 +224,4 @@ export default interface OpcodeBuilder<Locator = unknown> {
   inlineBlock(block: SerializedInlineBlock): CompilableBlock;
   compileInline(sexp: Statements.Append): ['expr', Expression] | true;
   compileBlock(block: CompileBlock): void;
-  setComponentAttrs(value: boolean): void;
 }

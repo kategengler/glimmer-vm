@@ -6,8 +6,13 @@ import {
   CompilableTemplate,
   ContentType,
   NamedBlocks,
+  STDLib,
+  Compiler,
+  LayoutWithContext,
+  CompilationResolver,
+  ContainingMetadata,
 } from '@glimmer/interfaces';
-import { Op, $s0, MachineOp, $sp, $v0 } from '@glimmer/vm';
+import { Op, $s0, MachineOp, $sp, $v0, $fp } from '@glimmer/vm';
 import { PrimitiveType } from '@glimmer/program';
 import {
   BuilderOperand,
@@ -18,15 +23,15 @@ import {
   num,
   strArray,
   arr,
-  ContainingMetadata,
-  CompilationResolver,
   CompileHelper,
   CurryComponent,
   StaticComponent,
   Component,
+  DynamicComponent,
+  serializable,
 } from './interfaces';
 import { OpcodeSize } from '@glimmer/encoder';
-import { Primitive, PLACEHOLDER_HANDLE } from '../interfaces';
+import { Primitive, PLACEHOLDER_HANDLE, ComponentArgs } from '../interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 import { expressionCompiler, ATTRS_BLOCK } from '../syntax';
 import { EMPTY_ARRAY } from '@glimmer/util';
@@ -35,6 +40,24 @@ import { EMPTY_BLOCKS } from '../utils';
 export function main(encoder: Encoder) {
   encoder.push(Op.Main, $s0);
   invokePreparedComponent(encoder, false, false, true);
+}
+
+export function guardedAppend<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
+  meta: ContainingMetadata<Locator>,
+  stdlib: STDLib,
+  expression: WireFormat.Expression,
+  trusting: boolean
+): void {
+  encoder.pushMachine(MachineOp.PushFrame);
+
+  expr(encoder, resolver, compiler, meta, expression);
+
+  encoder.pushMachine(MachineOp.InvokeStatic, stdlib.getAppend(trusting));
+
+  encoder.pushMachine(MachineOp.PopFrame);
 }
 
 export function dynamicScope(encoder: Encoder, names: Option<string[]>, block: Block) {
@@ -106,13 +129,14 @@ export function primitive(encoder: Encoder, _primitive: Primitive) {
 export function yieldBlock<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   to: number,
   params: Option<WireFormat.Core.Params>
 ) {
-  compileArgs(encoder, resolver, meta, params, null, EMPTY_BLOCKS, false);
+  compileArgs(encoder, resolver, compiler, meta, params, null, EMPTY_BLOCKS, false);
   encoder.push(Op.GetBlock, to);
-  resolveCompilable(encoder, meta.isEager);
+  resolveCompilable(encoder, compiler.isEager);
   encoder.push(Op.InvokeYield);
   encoder.push(Op.PopScope);
   encoder.pushMachine(MachineOp.PopFrame);
@@ -155,9 +179,82 @@ export function resolveCompilable(encoder: Encoder, isEager: boolean) {
   }
 }
 
+export function invokeStaticBlock<Locator>(
+  encoder: Encoder,
+  compiler: Compiler<unknown, Locator>,
+  block: CompilableBlock,
+  callerCount = 0
+): void {
+  let { parameters } = block.symbolTable;
+  let calleeCount = parameters.length;
+  let count = Math.min(callerCount, calleeCount);
+
+  encoder.pushMachine(MachineOp.PushFrame);
+
+  if (count) {
+    encoder.push(Op.ChildScope);
+
+    for (let i = 0; i < count; i++) {
+      encoder.push(Op.Dup, $fp, callerCount - i);
+      encoder.push(Op.SetVariable, parameters[i]);
+    }
+  }
+
+  pushCompilable(encoder, block, compiler.isEager);
+  resolveCompilable(encoder, compiler.isEager);
+  encoder.pushMachine(MachineOp.InvokeVirtual);
+
+  if (count) {
+    encoder.push(Op.PopScope);
+  }
+
+  encoder.pushMachine(MachineOp.PopFrame);
+}
+
+export function staticComponent<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
+  meta: ContainingMetadata<Locator>,
+  handle: number,
+  args: ComponentArgs
+): void {
+  let [params, hash, blocks] = args;
+
+  if (handle !== null) {
+    let { capabilities, compilable } = resolver.resolveLayoutForHandle(handle);
+
+    if (compilable) {
+      encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
+
+      invokeStaticComponent(encoder, resolver, compiler, meta, {
+        capabilities,
+        layout: compilable,
+        attrs: null,
+        params,
+        hash,
+        synthetic: false,
+        blocks,
+      });
+    } else {
+      encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
+
+      invokeComponent(encoder, resolver, compiler, meta, {
+        capabilities,
+        attrs: null,
+        params,
+        hash,
+        synthetic: false,
+        blocks,
+      });
+    }
+  }
+}
+
 export function invokeStaticComponent<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   { capabilities, layout, attrs, params, hash, synthetic, blocks }: StaticComponent
 ) {
@@ -166,7 +263,7 @@ export function invokeStaticComponent<Locator>(
   let bailOut = symbolTable.hasEval || capabilities.prepareArgs;
 
   if (bailOut) {
-    invokeComponent(encoder, resolver, meta, {
+    invokeComponent(encoder, resolver, compiler, meta, {
       capabilities,
       attrs,
       params,
@@ -186,7 +283,7 @@ export function invokeStaticComponent<Locator>(
 
   if (capabilities.createArgs) {
     encoder.pushMachine(MachineOp.PushFrame);
-    compileArgs(encoder, resolver, meta, null, hash, EMPTY_BLOCKS, synthetic);
+    compileArgs(encoder, resolver, compiler, meta, null, hash, EMPTY_BLOCKS, synthetic);
   }
 
   encoder.push(Op.BeginComponentTransaction);
@@ -225,10 +322,10 @@ export function invokeStaticComponent<Locator>(
         }
 
         if (callerBlock) {
-          pushYieldableBlock(encoder, callerBlock, meta.isEager);
+          pushYieldableBlock(encoder, callerBlock, compiler.isEager);
           bindings.push({ symbol: i + 1, isBlock: true });
         } else {
-          pushYieldableBlock(encoder, null, meta.isEager);
+          pushYieldableBlock(encoder, null, compiler.isEager);
           bindings.push({ symbol: i + 1, isBlock: true });
         }
 
@@ -249,7 +346,7 @@ export function invokeStaticComponent<Locator>(
         let index = keys.indexOf(lookupName);
 
         if (index !== -1) {
-          expr(encoder, resolver, meta, values[index]);
+          expr(encoder, resolver, compiler, meta, values[index]);
           bindings.push({ symbol: i + 1, isBlock: false });
         }
 
@@ -269,7 +366,7 @@ export function invokeStaticComponent<Locator>(
     }
   }
 
-  invokeStatic(encoder, layout, meta.isEager);
+  invokeStatic(encoder, layout, compiler.isEager);
 
   if (capabilities.createInstance) {
     encoder.push(Op.DidRenderLayout, $s0);
@@ -286,9 +383,44 @@ export function invokeStaticComponent<Locator>(
   encoder.push(Op.Load, $s0);
 }
 
+export function invokeDynamicComponent<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
+  meta: ContainingMetadata<Locator>,
+  { definition, attrs, params, hash, synthetic, blocks }: DynamicComponent
+) {
+  replayable(encoder, {
+    args: () => {
+      expr(encoder, resolver, compiler, meta, definition);
+      encoder.push(Op.Dup, $sp, 0);
+      return 2;
+    },
+
+    body: () => {
+      reserveTarget(encoder, Op.JumpUnless, 'ELSE');
+
+      encoder.push(Op.ResolveDynamicComponent, { type: 'serializable', value: meta.referrer });
+      encoder.push(Op.PushDynamicComponentInstance);
+
+      invokeComponent(encoder, resolver, compiler, meta, {
+        capabilities: true,
+        attrs,
+        params,
+        hash,
+        synthetic,
+        blocks,
+      });
+
+      label(encoder, 'ELSE');
+    },
+  });
+}
+
 export function invokeComponent<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   { capabilities, attrs, params, hash, synthetic, blocks: namedBlocks, layout }: Component
 ) {
@@ -304,14 +436,14 @@ export function invokeComponent<Locator>(
 
   let blocks = namedBlocks.with('attrs', attrs);
 
-  compileArgs(encoder, resolver, meta, params, hash, blocks, synthetic);
+  compileArgs(encoder, resolver, compiler, meta, params, hash, blocks, synthetic);
   encoder.push(Op.PrepareArgs, $s0);
 
   invokePreparedComponent(encoder, blocks.has('default'), bindableBlocks, bindableAtNames, () => {
     if (layout) {
       pushSymbolTable(encoder, layout.symbolTable);
-      pushCompilable(encoder, layout, meta.isEager);
-      resolveCompilable(encoder, meta.isEager);
+      pushCompilable(encoder, layout, compiler.isEager);
+      resolveCompilable(encoder, compiler.isEager);
     } else {
       encoder.push(Op.GetComponentLayout, $s0);
     }
@@ -379,15 +511,16 @@ export function invokeBareComponent(encoder: Encoder) {
 export function curryComponent<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   { definition, params, hash, synthetic }: CurryComponent
 ): void {
   let referrer = meta.referrer;
 
   encoder.pushMachine(MachineOp.PushFrame);
-  compileArgs(encoder, resolver, meta, params, hash, EMPTY_BLOCKS, synthetic);
+  compileArgs(encoder, resolver, compiler, meta, params, hash, EMPTY_BLOCKS, synthetic);
   encoder.push(Op.CaptureArgs);
-  expr(encoder, resolver, meta, definition);
+  expr(encoder, resolver, compiler, meta, definition);
   encoder.push(Op.CurryComponent, { type: 'serializable', value: referrer });
   encoder.pushMachine(MachineOp.PopFrame);
   encoder.push(Op.Fetch, $v0);
@@ -731,11 +864,12 @@ export function hasBlockParams(encoder: Encoder, isEager: boolean, to: number) {
 export function expr<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   expression: WireFormat.Expression
 ) {
   if (Array.isArray(expression)) {
-    expressionCompiler().compileExpr(expression, encoder, resolver, meta);
+    expressionCompiler().compileSimple(expression, encoder, resolver, compiler, meta);
   } else {
     primitive(encoder, expression);
     encoder.push(Op.PrimitiveReference);
@@ -745,6 +879,7 @@ export function expr<Locator>(
 export function compileArgs<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   params: Option<WireFormat.Core.Params>,
   hash: Option<WireFormat.Core.Hash>,
@@ -752,12 +887,12 @@ export function compileArgs<Locator>(
   synthetic: boolean
 ): void {
   if (blocks.hasAny) {
-    pushYieldableBlock(encoder, blocks.get('default'), meta.isEager);
-    pushYieldableBlock(encoder, blocks.get('else'), meta.isEager);
-    pushYieldableBlock(encoder, blocks.get('attrs'), meta.isEager);
+    pushYieldableBlock(encoder, blocks.get('default'), compiler.isEager);
+    pushYieldableBlock(encoder, blocks.get('else'), compiler.isEager);
+    pushYieldableBlock(encoder, blocks.get('attrs'), compiler.isEager);
   }
 
-  let count = compileParams(encoder, resolver, meta, params);
+  let count = compileParams(encoder, resolver, compiler, meta, params);
 
   let flags = count << 4;
 
@@ -773,7 +908,7 @@ export function compileArgs<Locator>(
     names = hash[0];
     let val = hash[1];
     for (let i = 0; i < val.length; i++) {
-      expr(encoder, resolver, meta, val[i]);
+      expr(encoder, resolver, compiler, meta, val[i]);
     }
   }
 
@@ -783,13 +918,14 @@ export function compileArgs<Locator>(
 export function compileParams<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   params: Option<WireFormat.Core.Params>
 ) {
   if (!params) return 0;
 
   for (let i = 0; i < params.length; i++) {
-    expr(encoder, resolver, meta, params[i]);
+    expr(encoder, resolver, compiler, meta, params[i]);
   }
 
   return params.length;
@@ -798,26 +934,84 @@ export function compileParams<Locator>(
 export function helper<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   { handle, params, hash }: CompileHelper
 ) {
   encoder.pushMachine(MachineOp.PushFrame);
-  compileArgs(encoder, resolver, meta, params, hash, EMPTY_BLOCKS, true);
+  compileArgs(encoder, resolver, compiler, meta, params, hash, EMPTY_BLOCKS, true);
   encoder.push(Op.Helper, { type: 'handle', value: handle });
   encoder.pushMachine(MachineOp.PopFrame);
   encoder.push(Op.Fetch, $v0);
 }
 
+export function params<Locator>(
+  encoder: Encoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
+  meta: ContainingMetadata<Locator>,
+  params: Option<WireFormat.Core.Params>
+) {
+  if (!params) return 0;
+
+  for (let i = 0; i < params.length; i++) {
+    expr(encoder, resolver, compiler, meta, params[i]);
+  }
+
+  return params.length;
+}
+
 export function modifier<Locator>(
   encoder: Encoder,
   resolver: CompilationResolver<Locator>,
+  compiler: Compiler<unknown, Locator>,
   meta: ContainingMetadata<Locator>,
   { handle, params, hash }: CompileHelper
 ) {
   encoder.pushMachine(MachineOp.PushFrame);
-  compileArgs(encoder, resolver, meta, params, hash, EMPTY_BLOCKS, true);
+  compileArgs(encoder, resolver, compiler, meta, params, hash, EMPTY_BLOCKS, true);
   encoder.push(Op.Modifier, { type: 'handle', value: handle });
   encoder.pushMachine(MachineOp.PopFrame);
+}
+
+export function remoteElement(encoder: Encoder, block: Block): void {
+  encoder.push(Op.PushRemoteElement);
+  block(encoder);
+  encoder.push(Op.PopRemoteElement);
+}
+
+export function list(encoder: Encoder, start: string, block: Block): void {
+  reserveTarget(encoder, Op.EnterList, start);
+  block(encoder);
+  encoder.push(Op.ExitList);
+}
+
+export function invokePartial(
+  encoder: Encoder,
+  referrer: unknown,
+  symbols: string[],
+  evalInfo: number[]
+) {
+  let _meta = serializable(referrer);
+  let _symbols = strArray(symbols);
+  let _evalInfo = arr(evalInfo);
+
+  encoder.push(Op.InvokePartial, _meta, _symbols, _evalInfo);
+}
+
+export function meta<Locator>(layout: LayoutWithContext<Locator>): ContainingMetadata<Locator> {
+  return {
+    asPartial: layout.asPartial,
+    evalSymbols: evalSymbols(layout),
+    referrer: layout.referrer,
+    size: layout.block.symbols.length,
+  };
+}
+
+function evalSymbols(layout: LayoutWithContext<unknown>): Option<string[]> {
+  let { block } = layout;
+
+  return block.hasEval ? block.symbols : null;
 }
 
 function sizeImmediate(encoder: Encoder, shifted: number, primitive: BuilderOperand) {

@@ -10,6 +10,7 @@ import { ComponentArgs, ComponentBuilder as IComponentBuilder } from './interfac
 
 import OpcodeBuilder from './opcode-builder/interfaces';
 import { ATTRS_BLOCK } from './syntax';
+import { meta } from './opcode-builder/helpers';
 
 export class WrappedBuilder<Locator> implements CompilableProgram {
   public symbolTable: ProgramSymbolTable;
@@ -41,7 +42,7 @@ export class WrappedBuilder<Locator> implements CompilableProgram {
   compile(): number {
     if (this.compiled !== null) return this.compiled;
 
-    let builder = this.compiler.builderFor(this.layout);
+    let builder = this.compiler.builderFor(meta(this.layout));
 
     return (this.compiled = builder.wrappedComponent(this.layout, this.attrsBlockNumber));
   }

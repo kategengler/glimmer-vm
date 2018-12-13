@@ -10,7 +10,8 @@ import {
   TemplateLocator,
   CompilableProgram,
   CompilableTemplate,
-  LayoutWithContext,
+  ContainingMetadata,
+  Compiler,
 } from '@glimmer/interfaces';
 import {
   CompilableProgram as CompilableProgramInstance,
@@ -77,11 +78,9 @@ export interface PartialTemplateLocator<Locator> extends ModuleLocator {
 // to make --declaration happy
 export { CompilableTemplate };
 
-export class EagerCompiler<Locator> extends AbstractCompiler<
-  Locator,
-  EagerOpcodeBuilder<Locator>,
-  WriteOnlyProgram
-> {
+export class EagerCompiler<Locator>
+  extends AbstractCompiler<Locator, EagerOpcodeBuilder<Locator>, WriteOnlyProgram>
+  implements Compiler<EagerOpcodeBuilder<Locator>, Locator> {
   static create<Locator>(
     macros: Macros,
     program: WriteOnlyProgram,
@@ -90,8 +89,10 @@ export class EagerCompiler<Locator> extends AbstractCompiler<
     return new EagerCompiler(macros, program, resolver);
   }
 
-  builderFor(containingLayout: LayoutWithContext<Locator>): EagerOpcodeBuilder<Locator> {
-    return new EagerOpcodeBuilder(this, containingLayout, true);
+  readonly isEager = true;
+
+  builderFor(meta: ContainingMetadata<Locator>): EagerOpcodeBuilder<Locator> {
+    return new EagerOpcodeBuilder<Locator>(this, meta);
   }
 }
 

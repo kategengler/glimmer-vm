@@ -9,13 +9,13 @@ import {
   CompileTimeConstants,
   CompileTimeLookup,
   CompileTimeProgram,
-  LayoutWithContext,
   Opaque,
   CompilerBuffer,
   ResolvedLayout,
   MaybeResolvedLayout,
   CompilableProgram,
   NamedBlocks as INamedBlocks,
+  ContainingMetadata,
 } from '@glimmer/interfaces';
 import { Statements, Core, Expression, Statement } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
@@ -26,6 +26,8 @@ export abstract class AbstractCompiler<
   Program extends CompileTimeProgram = CompileTimeProgram
 > implements Compiler<Builder> {
   stdLib!: STDLib; // Set by this.initialize() in constructor
+
+  abstract isEager: boolean;
 
   protected constructor(
     public readonly macros: Macros,
@@ -58,8 +60,8 @@ export abstract class AbstractCompiler<
     this.macros.blocks.compile(name, params, hash, blocks, builder);
   }
 
-  add(statements: Statement[], containingLayout: LayoutWithContext<Locator>): number {
-    return compile(statements, this.builderFor(containingLayout), this);
+  add(statements: Statement[], meta: ContainingMetadata<Locator>): number {
+    return compile(statements, this.builderFor(meta), this);
   }
 
   commit(scopeSize: number, buffer: CompilerBuffer): number {
@@ -117,7 +119,7 @@ export abstract class AbstractCompiler<
     return this.resolver.lookupHelper(name, referrer);
   }
 
-  abstract builderFor(containingLayout: LayoutWithContext<Opaque>): Builder;
+  abstract builderFor(meta: ContainingMetadata<Locator>): Builder;
 }
 
 export let debugCompiler: (compiler: AnyAbstractCompiler, handle: number) => void;
