@@ -23,35 +23,34 @@ import C = WireFormat.Core;
 import { EMPTY_BLOCKS } from './utils';
 import {
   dynamicScope,
-  pushPrimitiveReference,
-  label,
-  reserveMachineTarget,
   replayable,
   replayableIf,
   staticAttr,
   startDebugger,
   hasBlockParams,
   helper,
-  expr,
-  curryComponent,
   modifier,
-  invokeComponent,
-  invokeStaticComponent,
-  yieldBlock,
   guardedAppend,
-  invokeStaticBlock,
   remoteElement,
-  invokeDynamicComponent,
-  reserveTarget,
   list,
   invokePartial,
   params,
   templates,
   frame,
-  staticComponentHelper,
   inlineBlock,
-} from './opcode-builder/helpers';
+} from './opcode-builder/helpers/index';
 import { resolveLayoutForTag } from './resolver';
+import { expr } from './opcode-builder/helpers/shared';
+import { yieldBlock, invokeStaticBlock } from './opcode-builder/helpers/blocks';
+import { pushPrimitiveReference } from './opcode-builder/helpers/vm';
+import {
+  invokeDynamicComponent,
+  invokeStaticComponent,
+  invokeComponent,
+  curryComponent,
+  staticComponentHelper,
+} from './opcode-builder/helpers/components';
+import { reserveTarget, reserveMachineTarget, label } from './opcode-builder/helpers/labels';
 
 export type TupleSyntax = WireFormat.Statement | WireFormat.TupleExpression;
 export type CompilerFunction<T extends TupleSyntax> = ((sexp: T, builder: OpcodeBuilder) => void);

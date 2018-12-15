@@ -16,7 +16,7 @@ import {
 import { Statements, Core, Expression } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from './opcode-builder/interfaces';
-import { main, stdAppend } from './opcode-builder/helpers';
+import { main, stdAppend } from './opcode-builder/helpers/index';
 import { InstructionEncoder } from '@glimmer/encoder';
 import { EncoderImpl } from './opcode-builder/encoder';
 import { resolveLayoutForHandle } from './resolver';

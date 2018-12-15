@@ -2,7 +2,7 @@ import { Macros, staticComponent } from '@glimmer/opcode-compiler';
 import { Option } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 import { EMPTY_BLOCKS } from '@glimmer/opcode-compiler';
-import { invokeStaticBlock, resolveLayoutForTag } from '@glimmer/opcode-compiler';
+import { resolveLayoutForTag, invokeStaticBlock } from '@glimmer/opcode-compiler';
 
 export default class TestMacros<Locator> extends Macros<Locator> {
   constructor() {

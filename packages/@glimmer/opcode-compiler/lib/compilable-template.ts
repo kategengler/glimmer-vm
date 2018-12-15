@@ -9,9 +9,9 @@ import {
 } from '@glimmer/interfaces';
 import { PLACEHOLDER_HANDLE } from './interfaces';
 import { SerializedInlineBlock } from '@glimmer/wire-format';
-import { meta } from './opcode-builder/helpers';
 import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 import { compile } from './compile';
+import { meta } from './opcode-builder/helpers/shared';
 
 export class CompilableProgram<Locator> implements ICompilableProgram {
   private compiled: Option<number> = null;

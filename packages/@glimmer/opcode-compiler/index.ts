@@ -6,7 +6,7 @@ export { compile } from './lib/compile';
 export { CompilerImpl, debugCompiler } from './lib/compiler';
 
 export { CompilableBlockImpl, CompilableProgram } from './lib/compilable-template';
-export { invokeStaticBlock, staticComponent } from './lib/opcode-builder/helpers';
+export { staticComponent } from './lib/opcode-builder/helpers/index';
 
 export {
   default as OpcodeBuilder,
@@ -14,6 +14,8 @@ export {
   OpcodeBuilderCompiler,
   OpcodeBuilderEncoder,
 } from './lib/opcode-builder/interfaces';
+
+export { invokeStaticBlock } from './lib/opcode-builder/helpers/blocks';
 
 export { default as builder } from './lib/opcode-builder/builder';
 

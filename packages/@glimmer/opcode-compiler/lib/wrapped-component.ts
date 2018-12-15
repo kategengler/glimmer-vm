@@ -7,8 +7,9 @@ import {
 
 import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 import { ATTRS_BLOCK } from './syntax';
-import { meta, wrappedComponent } from './opcode-builder/helpers';
 import builder from './opcode-builder/builder';
+import { meta } from './opcode-builder/helpers/shared';
+import { wrappedComponent } from './opcode-builder/helpers/components';
 
 export class WrappedBuilder<Locator> implements CompilableProgram {
   public symbolTable: ProgramSymbolTable;
