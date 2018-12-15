@@ -15,8 +15,9 @@ import {
 import {
   CompilableProgram as CompilableProgramInstance,
   Macros,
-  EagerOpcodeBuilder,
   AbstractCompiler,
+  OpcodeBuilder,
+  builder,
 } from '@glimmer/opcode-compiler';
 import { WriteOnlyProgram, ConstantPool, SerializedHeap } from '@glimmer/program';
 
@@ -78,8 +79,7 @@ export interface PartialTemplateLocator<Locator> extends ModuleLocator {
 // to make --declaration happy
 export { CompilableTemplate };
 
-export class EagerCompiler<Locator>
-  extends AbstractCompiler<Locator, EagerOpcodeBuilder<Locator>, WriteOnlyProgram>
+export class EagerCompiler<Locator> extends AbstractCompiler<Locator, WriteOnlyProgram>
   implements OpcodeBuilderCompiler<Locator> {
   static create<Locator>(
     macros: Macros<Locator>,
@@ -91,8 +91,8 @@ export class EagerCompiler<Locator>
 
   readonly isEager = true;
 
-  builderFor(meta: ContainingMetadata<Locator>): EagerOpcodeBuilder<Locator> {
-    return new EagerOpcodeBuilder<Locator>(this, meta);
+  builderFor(meta: ContainingMetadata<Locator>): OpcodeBuilder<Locator> {
+    return builder(this, meta);
   }
 }
 

@@ -160,7 +160,6 @@ export interface Compiler<
     compiler: Compiler<Builder, Locator, InstructionEncoder, Op, MachineOp>,
     meta: ContainingMetadata<Locator>
   ): void;
-  builderFor(meta: ContainingMetadata<Locator>): Builder;
 }
 
 export interface CompilableTemplate<S = SymbolTable> {

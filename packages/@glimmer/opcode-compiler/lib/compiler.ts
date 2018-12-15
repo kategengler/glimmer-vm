@@ -1,4 +1,4 @@
-import { OpcodeBuilderImpl, StdLib } from './opcode-builder/builder';
+import builder, { StdLib } from './opcode-builder/builder';
 import { Macros } from './syntax';
 import { compile } from './compile';
 import { debugSlice } from './debug';
@@ -8,7 +8,6 @@ import {
   CompileTimeConstants,
   CompileTimeLookup,
   CompileTimeProgram,
-  Opaque,
   CompilerBuffer,
   ResolvedLayout,
   MaybeResolvedLayout,
@@ -26,7 +25,6 @@ import { EncoderImpl } from './opcode-builder/encoder';
 
 export abstract class AbstractCompiler<
   Locator,
-  Builder extends OpcodeBuilderImpl<Locator>,
   Program extends CompileTimeProgram = CompileTimeProgram
 > implements OpcodeBuilderCompiler<Locator> {
   stdLib!: STDLib; // Set by this.initialize() in constructor
@@ -73,7 +71,7 @@ export abstract class AbstractCompiler<
   }
 
   add(statements: Statement[], meta: ContainingMetadata<Locator>): number {
-    return compile(statements, this.builderFor(meta));
+    return compile(statements, builder(this, meta));
   }
 
   commit(scopeSize: number, buffer: CompilerBuffer): number {
@@ -130,8 +128,6 @@ export abstract class AbstractCompiler<
   resolveHelper(name: string, referrer: Locator): Option<number> {
     return this.resolver.lookupHelper(name, referrer);
   }
-
-  abstract builderFor(meta: ContainingMetadata<Locator>): Builder;
 }
 
 function compileStd<Locator>(compiler: OpcodeBuilderCompiler<Locator>): StdLib {
@@ -162,5 +158,3 @@ if (DEBUG) {
     debugSlice(compiler['program'], start, end);
   };
 }
-
-export type AnyAbstractCompiler = AbstractCompiler<Opaque, OpcodeBuilderImpl<Opaque>>;

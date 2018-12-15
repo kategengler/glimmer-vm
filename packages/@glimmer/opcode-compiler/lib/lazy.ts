@@ -1,4 +1,3 @@
-import { LazyOpcodeBuilder } from './opcode-builder/builder';
 import { Macros } from './syntax';
 import { AbstractCompiler } from './compiler';
 import {
@@ -6,10 +5,13 @@ import {
   Compiler,
   CompileTimeLookup,
   ContainingMetadata,
+  CompileTimeProgram,
 } from '@glimmer/interfaces';
 import { Program, LazyConstants } from '@glimmer/program';
 import { InstructionEncoder } from '@glimmer/encoder';
 import { Op, MachineOp } from '@glimmer/vm';
+import OpcodeBuilder from './opcode-builder/interfaces';
+import builder from './opcode-builder/builder';
 
 export interface LazyCompilerOptions<Locator> {
   lookup: CompileTimeLookup<Locator>;
@@ -18,8 +20,8 @@ export interface LazyCompilerOptions<Locator> {
   macros: Macros<Locator>;
 }
 
-export class LazyCompiler<Locator> extends AbstractCompiler<Locator, LazyOpcodeBuilder<Locator>>
-  implements Compiler<LazyOpcodeBuilder<Locator>, Locator, InstructionEncoder, Op, MachineOp> {
+export class LazyCompiler<Locator> extends AbstractCompiler<Locator, CompileTimeProgram>
+  implements Compiler<OpcodeBuilder<Locator>, Locator, InstructionEncoder, Op, MachineOp> {
   program!: Program<Locator>; // Hides property on base class
 
   static create<Locator>(
@@ -35,7 +37,7 @@ export class LazyCompiler<Locator> extends AbstractCompiler<Locator, LazyOpcodeB
 
   isEager = false;
 
-  builderFor(meta: ContainingMetadata<Locator>): LazyOpcodeBuilder<Locator> {
-    return new LazyOpcodeBuilder<Locator>(this, meta);
+  builderFor(meta: ContainingMetadata<Locator>): OpcodeBuilder<Locator> {
+    return builder(this, meta);
   }
 }

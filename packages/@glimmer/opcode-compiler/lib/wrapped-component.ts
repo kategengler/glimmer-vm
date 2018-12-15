@@ -8,6 +8,7 @@ import {
 import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 import { ATTRS_BLOCK } from './syntax';
 import { meta, wrappedComponent } from './opcode-builder/helpers';
+import builder from './opcode-builder/builder';
 
 export class WrappedBuilder<Locator> implements CompilableProgram {
   public symbolTable: ProgramSymbolTable;
@@ -39,13 +40,13 @@ export class WrappedBuilder<Locator> implements CompilableProgram {
   compile(): number {
     if (this.compiled !== null) return this.compiled;
 
-    let builder = this.compiler.builderFor(meta(this.layout));
+    let b = builder(this.compiler, meta(this.layout));
 
     return (this.compiled = wrappedComponent(
-      builder.encoder,
-      builder.resolver,
-      builder.compiler,
-      builder.meta,
+      b.encoder,
+      b.resolver,
+      b.compiler,
+      b.meta,
       this.layout,
       this.attrsBlockNumber
     ));

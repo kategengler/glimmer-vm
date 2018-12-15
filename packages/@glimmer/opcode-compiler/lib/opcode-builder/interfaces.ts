@@ -22,7 +22,6 @@ import {
 } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 
-import { ComponentArgs } from '../interfaces';
 import { Op, MachineOp } from '@glimmer/vm';
 import { Core } from '@glimmer/wire-format';
 import { Operand, InstructionEncoder } from '@glimmer/encoder';
@@ -177,19 +176,4 @@ export default interface OpcodeBuilder<Locator = unknown> {
   readonly encoder: OpcodeBuilderEncoder;
   readonly meta: ContainingMetadata<Locator>;
   readonly stdLib: STDLib;
-
-  push(name: Op, ...args: BuilderOperands): void;
-  pushMachine(name: MachineOp, ...args: Operands): void;
-
-  dynamicAttr(name: string, namespace: Option<string>, trusting: boolean): void;
-
-  bindDynamicScope(names: string[]): void;
-
-  staticComponentHelper(
-    tag: string,
-    hash: WireFormat.Core.Hash,
-    template: Option<CompilableBlock>
-  ): boolean;
-
-  staticComponent(handle: number, args: ComponentArgs): void;
 }
