@@ -7,8 +7,7 @@ import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 
 export function compile<Locator>(
   statements: Statement[],
-  builder: OpcodeBuilderImpl<Locator>,
-  compiler: OpcodeBuilderCompiler<Locator>
+  builder: OpcodeBuilderImpl<Locator>
 ): number {
   let sCompiler = statementCompiler();
 
@@ -16,10 +15,10 @@ export function compile<Locator>(
     sCompiler.compile(statements[i], builder);
   }
 
-  let handle = builder.commit();
+  let handle = builder.encoder.commit(builder.compiler, builder.meta.size);
 
   if (DEBUG) {
-    debugCompiler(compiler as OpcodeBuilderCompiler<Locator>, handle);
+    debugCompiler(builder.compiler as OpcodeBuilderCompiler<Locator>, handle);
   }
 
   return handle;

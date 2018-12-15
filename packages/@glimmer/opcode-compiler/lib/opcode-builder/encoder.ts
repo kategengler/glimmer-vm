@@ -1,6 +1,6 @@
 import { InstructionEncoder, OpcodeSize } from '@glimmer/encoder';
 import { CompileTimeConstants, Encoder, Labels } from '@glimmer/interfaces';
-import { BuilderOperands, BuilderOperand, Operands } from './interfaces';
+import { BuilderOperands, BuilderOperand, Operands, OpcodeBuilderCompiler } from './interfaces';
 import { MachineOp, Op } from '@glimmer/vm';
 import { LazyConstants } from '@glimmer/program';
 import { Stack, dict, expect } from '@glimmer/util';
@@ -41,6 +41,11 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
 
   get nextPos(): number {
     return this.encoder.size;
+  }
+
+  commit(compiler: OpcodeBuilderCompiler<unknown>, size: number): number {
+    this.pushMachine(MachineOp.Return);
+    return compiler.commit(size, this.encoder.buffer);
   }
 
   reserve(name: Op) {

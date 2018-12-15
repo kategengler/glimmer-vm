@@ -1,6 +1,7 @@
 import { CompileTimeConstants } from '../program';
 import { Dict } from '../core';
 import { BuilderOperands, Operands, BuilderOperand } from './operands';
+import { Compiler } from '../template';
 
 export interface Labels<InstructionEncoder> {
   readonly labels: Dict<number>;
@@ -18,6 +19,11 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
   readonly nextPos: number;
 
   currentLabels: Labels<InstructionEncoder>;
+
+  commit(
+    compiler: Compiler<unknown, unknown, InstructionEncoder, Op, MachineOp>,
+    size: number
+  ): number;
 
   reserve(name: Op): void;
   reserveWithOperand(name: Op, operand: number): void;

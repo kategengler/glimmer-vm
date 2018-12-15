@@ -233,7 +233,6 @@ export default interface OpcodeBuilder<Locator = unknown> {
 
   // TODO: These don't seem like the right abstraction, but leaving
   // them for now in the interest of expedience.
-  commit(): number;
   templates(blocks: Core.Blocks): NamedBlocks;
   inlineBlock(block: SerializedInlineBlock): CompilableBlock;
   compileInline(sexp: Statements.Append): ['expr', Expression] | true;

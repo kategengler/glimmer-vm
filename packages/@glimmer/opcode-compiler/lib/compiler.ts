@@ -70,7 +70,7 @@ export abstract class AbstractCompiler<
   }
 
   add(statements: Statement[], meta: ContainingMetadata<Locator>): number {
-    return compile(statements, this.builderFor(meta), this);
+    return compile(statements, this.builderFor(meta));
   }
 
   commit(scopeSize: number, buffer: CompilerBuffer): number {

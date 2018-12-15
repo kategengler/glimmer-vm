@@ -96,7 +96,7 @@ export class StdOpcodeBuilder<Locator> {
   ): number {
     let builder = new StdOpcodeBuilder(compiler);
     callback(builder);
-    return builder.commit();
+    return builder.encoder.commit(builder.compiler, 0);
   }
 
   readonly constants: CompileTimeConstants;
@@ -109,11 +109,6 @@ export class StdOpcodeBuilder<Locator> {
     this.compiler = compiler;
     this.constants = compiler.constants;
     this.encoder = new EncoderImpl(this.instructionEncoder, this.constants);
-  }
-
-  commit(): number {
-    this.encoder.pushMachine(MachineOp.Return);
-    return this.compiler.commit(this.size, this.instructionEncoder.buffer);
   }
 
   ///
@@ -246,7 +241,7 @@ export abstract class OpcodeBuilderImpl<Locator> extends StdOpcodeBuilder<Locato
       this.encoder.push(Op.Load, $s1);
     });
 
-    let handle = this.commit();
+    let handle = this.encoder.commit(this.compiler, this.meta.size);
 
     if (DEBUG) {
       debugCompiler(this.compiler as Recast<any, AnyAbstractCompiler>, handle);
