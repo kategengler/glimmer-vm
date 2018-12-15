@@ -14,6 +14,9 @@ import OpcodeBuilder, {
   handle,
   OpcodeBuilderCompiler,
   OpcodeBuilderEncoder,
+  serializable,
+  strArray,
+  arr,
 } from './opcode-builder/interfaces';
 
 import Ops = WireFormat.Ops;
@@ -21,14 +24,6 @@ import S = WireFormat.Statements;
 import E = WireFormat.Expressions;
 import C = WireFormat.Core;
 import { EMPTY_BLOCKS } from './utils';
-import {
-  dynamicScope,
-  startDebugger,
-  helper,
-  list,
-  invokePartial,
-  frame,
-} from './opcode-builder/helpers/index';
 import { resolveLayoutForTag } from './resolver';
 import { expr, params } from './opcode-builder/helpers/shared';
 import {
@@ -37,7 +32,15 @@ import {
   inlineBlock,
   templates,
 } from './opcode-builder/helpers/blocks';
-import { pushPrimitiveReference, hasBlockParams } from './opcode-builder/helpers/vm';
+import {
+  pushPrimitiveReference,
+  hasBlockParams,
+  frame,
+  helper,
+  list,
+  startDebugger,
+  dynamicScope,
+} from './opcode-builder/helpers/vm';
 import {
   invokeDynamicComponent,
   invokeStaticComponent,
@@ -51,7 +54,6 @@ import { replayableIf, replayable } from './opcode-builder/helpers/conditional';
 import { modifier, staticAttr, remoteElement } from './opcode-builder/helpers/dom';
 
 export type TupleSyntax = WireFormat.Statement | WireFormat.TupleExpression;
-export type CompilerFunction<T extends TupleSyntax> = ((sexp: T, builder: OpcodeBuilder) => void);
 export type NewCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
   encoder: OpcodeBuilderEncoder,
@@ -62,10 +64,10 @@ export type NewCompilerFunction<T extends TupleSyntax, Locator> = ((
 export type LeafCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
   encoder: OpcodeBuilderEncoder,
-  meta: ContainingMetadata<Locator>
+  meta: ContainingMetadata<Locator>,
+  isEager: boolean
 ) => void);
 export type RegisteredSyntax<T extends TupleSyntax, Locator> =
-  | { type: 'full'; f: CompilerFunction<T> }
   | { type: 'leaf'; f: LeafCompilerFunction<T, Locator> }
   | { type: 'mini'; f: NewCompilerFunction<T, Locator> };
 
@@ -76,11 +78,6 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
   private funcs: RegisteredSyntax<Syntax, Locator>[] = [];
 
   constructor(private offset = 0) {}
-
-  add<T extends Syntax>(name: number, func: CompilerFunction<T>): void {
-    this.funcs.push({ type: 'full', f: func as CompilerFunction<Syntax> });
-    this.names[name] = this.funcs.length - 1;
-  }
 
   addSimple<T extends Syntax>(name: number, func: NewCompilerFunction<T, Locator>): void {
     this.funcs.push({ type: 'mini', f: func as NewCompilerFunction<Syntax, Locator> });
@@ -109,11 +106,11 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
       }`
     );
 
-    if (func.type !== 'mini') {
-      throw new Error('Expressions must be compiled in the new style');
+    if (func.type === 'mini') {
+      func.f(sexp as Syntax, encoder, resolver, compiler, meta);
+    } else {
+      func.f(sexp as Syntax, encoder, meta, compiler.isEager);
     }
-
-    func.f(sexp as Syntax, encoder, resolver, compiler, meta);
   }
 
   compile(sexp: Syntax, builder: OpcodeBuilder<Locator>): void {
@@ -125,10 +122,8 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
       `expected an implementation for ${this.offset === 0 ? Ops[sexp[0]] : ClientSide.Ops[sexp[1]]}`
     );
 
-    if (func.type === 'full') {
-      func.f(sexp, builder);
-    } else if (func.type === 'leaf') {
-      func.f(sexp, builder.encoder, builder.meta);
+    if (func.type === 'leaf') {
+      func.f(sexp, builder.encoder, builder.meta, builder.compiler.isEager);
     } else {
       func.f(sexp, builder.encoder, builder.resolver, builder.compiler, builder.meta);
     }
@@ -283,8 +278,6 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   STATEMENTS.addSimple(Ops.Partial, (sexp: S.Partial, encoder, resolver, compiler, meta) => {
     let [, name, evalInfo] = sexp;
 
-    let { referrer } = meta;
-
     replayableIf(encoder, {
       args() {
         expr(encoder, resolver, compiler, meta, name);
@@ -293,7 +286,13 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
       },
 
       ifTrue() {
-        invokePartial(encoder, referrer, meta.evalSymbols!, evalInfo);
+        encoder.push(
+          Op.InvokePartial,
+          serializable(meta.referrer),
+          strArray(meta.evalSymbols!),
+          arr(evalInfo)
+        );
+
         encoder.push(Op.PopScope);
         encoder.pushMachine(MachineOp.PopFrame);
       },
@@ -341,24 +340,14 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   );
 
-  STATEMENTS.add(Ops.Append, (sexp: S.Append, builder) => {
+  STATEMENTS.addSimple(Ops.Append, (sexp: S.Append, encoder, resolver, compiler, meta) => {
     let [, value, trusting] = sexp;
 
-    let returned =
-      builder.compiler.compileInline(sexp, builder.encoder, builder.resolver, builder.meta) ||
-      value;
+    let returned = compiler.compileInline(sexp, encoder, resolver, meta) || value;
 
     if (returned === true) return;
 
-    guardedAppend(
-      builder.encoder,
-      builder.resolver,
-      builder.compiler,
-      builder.meta,
-      builder.stdLib,
-      value,
-      trusting
-    );
+    guardedAppend(encoder, resolver, compiler, meta, value, trusting);
   });
 
   STATEMENTS.addSimple(Ops.Block, (sexp: S.Block, encoder, resolver, compiler, meta) => {
@@ -502,7 +491,7 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
     }
   });
 
-  EXPRESSIONS.addSimple(Ops.Get, (sexp: E.Get, encoder) => {
+  EXPRESSIONS.addLeaf(Ops.Get, (sexp: E.Get, encoder) => {
     let [, head, path] = sexp;
     encoder.push(Op.GetVariable, head);
     for (let i = 0; i < path.length; i++) {
@@ -510,40 +499,34 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
     }
   });
 
-  EXPRESSIONS.addSimple(
-    Ops.MaybeLocal,
-    (sexp: E.MaybeLocal, encoder, _resolver, _compiler, meta) => {
-      let [, path] = sexp;
+  EXPRESSIONS.addLeaf(Ops.MaybeLocal, (sexp: E.MaybeLocal, encoder, meta) => {
+    let [, path] = sexp;
 
-      if (meta.asPartial) {
-        let head = path[0];
-        path = path.slice(1);
+    if (meta.asPartial) {
+      let head = path[0];
+      path = path.slice(1);
 
-        encoder.push(Op.ResolveMaybeLocal, str(head));
-      } else {
-        encoder.push(Op.GetVariable, 0);
-      }
-
-      for (let i = 0; i < path.length; i++) {
-        encoder.push(Op.GetProperty, str(path[i]));
-      }
+      encoder.push(Op.ResolveMaybeLocal, str(head));
+    } else {
+      encoder.push(Op.GetVariable, 0);
     }
-  );
 
-  EXPRESSIONS.addSimple(Ops.Undefined, (_sexp, encoder) => {
+    for (let i = 0; i < path.length; i++) {
+      encoder.push(Op.GetProperty, str(path[i]));
+    }
+  });
+
+  EXPRESSIONS.addLeaf(Ops.Undefined, (_sexp, encoder) => {
     return pushPrimitiveReference(encoder, undefined);
   });
 
-  EXPRESSIONS.addSimple(Ops.HasBlock, (sexp: E.HasBlock, encoder) => {
+  EXPRESSIONS.addLeaf(Ops.HasBlock, (sexp: E.HasBlock, encoder) => {
     encoder.push(Op.HasBlock, sexp[1]);
   });
 
-  EXPRESSIONS.addSimple(
-    Ops.HasBlockParams,
-    (sexp: E.HasBlockParams, encoder, _resolver, compiler, _meta) => {
-      hasBlockParams(encoder, compiler.isEager, sexp[1]);
-    }
-  );
+  EXPRESSIONS.addLeaf(Ops.HasBlockParams, (sexp: E.HasBlockParams, encoder, _meta, isEager) => {
+    hasBlockParams(encoder, isEager, sexp[1]);
+  });
 
   return EXPRESSIONS;
 }

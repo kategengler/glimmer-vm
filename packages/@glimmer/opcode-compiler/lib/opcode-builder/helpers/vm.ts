@@ -1,9 +1,23 @@
 import { OpcodeSize } from '@glimmer/encoder';
-import { OpcodeBuilderEncoder, num, BuilderOperand, bool, str } from '../interfaces';
+import {
+  OpcodeBuilderEncoder,
+  num,
+  BuilderOperand,
+  bool,
+  str,
+  Block,
+  OpcodeBuilderCompiler,
+  CompileHelper,
+  strArray,
+  arr,
+} from '../interfaces';
 import { PrimitiveType } from '@glimmer/program';
-import { Op } from '@glimmer/vm';
+import { Op, MachineOp, SavedRegister, $v0 } from '@glimmer/vm';
 import { Primitive } from '../../interfaces';
-import { resolveCompilable } from './blocks';
+import { reserveTarget } from './labels';
+import { CompileTimeLookup, ContainingMetadata, Option } from '@glimmer/interfaces';
+import { compileArgs } from './shared';
+import { EMPTY_BLOCKS } from '../../utils';
 
 export function pushPrimitiveReference(encoder: OpcodeBuilderEncoder, value: Primitive) {
   primitive(encoder, value);
@@ -56,7 +70,7 @@ export function primitive(encoder: OpcodeBuilderEncoder, _primitive: Primitive) 
 
 export function hasBlockParams(encoder: OpcodeBuilderEncoder, isEager: boolean, to: number) {
   encoder.push(Op.GetBlock, to);
-  resolveCompilable(encoder, isEager);
+  if (!isEager) encoder.push(Op.CompileBlock);
   encoder.push(Op.HasBlockParams);
 }
 
@@ -72,4 +86,57 @@ function sizeImmediate(encoder: OpcodeBuilderEncoder, shifted: number, primitive
   }
 
   return shifted;
+}
+
+export function frame(encoder: OpcodeBuilderEncoder, block: Block): void {
+  encoder.pushMachine(MachineOp.PushFrame);
+  block(encoder);
+  encoder.pushMachine(MachineOp.PopFrame);
+}
+
+export function withSavedRegister(
+  encoder: OpcodeBuilderEncoder,
+  register: SavedRegister,
+  block: Block
+): void {
+  encoder.push(Op.Fetch, register);
+  block(encoder);
+  encoder.push(Op.Load, register);
+}
+
+export function list(encoder: OpcodeBuilderEncoder, start: string, block: Block): void {
+  reserveTarget(encoder, Op.EnterList, start);
+  block(encoder);
+  encoder.push(Op.ExitList);
+}
+
+export function helper<Locator>(
+  encoder: OpcodeBuilderEncoder,
+  resolver: CompileTimeLookup<Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>,
+  { handle, params, hash }: CompileHelper
+) {
+  encoder.pushMachine(MachineOp.PushFrame);
+  compileArgs(encoder, resolver, compiler, meta, params, hash, EMPTY_BLOCKS, true);
+  encoder.push(Op.Helper, { type: 'handle', value: handle });
+  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(Op.Fetch, $v0);
+}
+
+export function dynamicScope(encoder: OpcodeBuilderEncoder, names: Option<string[]>, block: Block) {
+  encoder.push(Op.PushDynamicScope);
+  if (names && names.length) {
+    encoder.push(Op.BindDynamicScope, { type: 'string-array', value: names });
+  }
+  block(encoder);
+  encoder.push(Op.PopDynamicScope);
+}
+
+export function startDebugger(
+  encoder: OpcodeBuilderEncoder,
+  symbols: string[],
+  evalInfo: number[]
+) {
+  encoder.push(Op.Debugger, strArray(symbols), arr(evalInfo));
 }

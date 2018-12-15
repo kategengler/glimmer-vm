@@ -18,23 +18,22 @@ import {
 import { resolveLayoutForTag, resolveLayoutForHandle } from '../../resolver';
 import { Op, $s0, $sp, MachineOp, $s1, $v0 } from '@glimmer/vm';
 import { NamedBlocksImpl, EMPTY_BLOCKS } from '../../utils';
-import { compileArgs, expr, blockFor } from './shared';
+import { compileArgs, expr, blockForLayout } from './shared';
 import {
   pushYieldableBlock,
   yieldBlock,
   invokeStaticBlock,
   pushSymbolTable,
   pushCompilable,
-  resolveCompilable,
   invokeStatic,
 } from './blocks';
 import { ATTRS_BLOCK } from '../../syntax';
-import { withSavedRegister } from './index';
 import { reserveTarget, label, labels } from './labels';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { debugCompiler } from '../../compiler';
 import { ComponentArgs } from '../../interfaces';
 import { replayable } from './conditional';
+import { withSavedRegister } from './vm';
 
 export function staticComponentHelper<Locator>(
   encoder: OpcodeBuilderEncoder,
@@ -268,7 +267,7 @@ export function wrappedComponent<Locator>(
 
     label(encoder, 'BODY');
 
-    invokeStaticBlock(encoder, compiler, blockFor(layout, compiler));
+    invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler));
 
     encoder.push(Op.Fetch, $s1);
     reserveTarget(encoder, Op.JumpUnless, 'END');
@@ -353,7 +352,7 @@ export function invokeComponent<Locator>(
     if (layout) {
       pushSymbolTable(encoder, layout.symbolTable);
       pushCompilable(encoder, layout, compiler.isEager);
-      resolveCompilable(encoder, compiler.isEager);
+      if (!compiler.isEager) encoder.push(Op.CompileBlock);
     } else {
       encoder.push(Op.GetComponentLayout, $s0);
     }

@@ -87,6 +87,7 @@ export function params<Locator>(
 }
 
 export function expr<Locator>(
+  // state: OpcodeBuilderState<Locator>,
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
@@ -101,7 +102,7 @@ export function expr<Locator>(
   }
 }
 
-export function blockFor<Locator>(
+export function blockForLayout<Locator>(
   layout: LayoutWithContext,
   compiler: OpcodeBuilderCompiler<Locator>
 ): CompilableBlock {

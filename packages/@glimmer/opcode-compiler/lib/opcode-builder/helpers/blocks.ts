@@ -51,7 +51,7 @@ export function yieldBlock<Locator>(
 ) {
   compileArgs(encoder, resolver, compiler, meta, params, null, EMPTY_BLOCKS, false);
   encoder.push(Op.GetBlock, to);
-  resolveCompilable(encoder, compiler.isEager);
+  if (!compiler.isEager) encoder.push(Op.CompileBlock);
   encoder.push(Op.InvokeYield);
   encoder.push(Op.PopScope);
   encoder.pushMachine(MachineOp.PopFrame);
@@ -110,7 +110,7 @@ export function invokeStaticBlock<Locator>(
   }
 
   pushCompilable(encoder, block, compiler.isEager);
-  resolveCompilable(encoder, compiler.isEager);
+  if (!compiler.isEager) encoder.push(Op.CompileBlock);
   encoder.pushMachine(MachineOp.InvokeVirtual);
 
   if (count) {
@@ -125,12 +125,6 @@ export function pushSymbolTable(encoder: OpcodeBuilderEncoder, table: Option<Sym
     encoder.push(Op.PushSymbolTable, { type: 'serializable', value: table });
   } else {
     primitive(encoder, null);
-  }
-}
-
-export function resolveCompilable(encoder: OpcodeBuilderEncoder, isEager: boolean) {
-  if (!isEager) {
-    encoder.push(Op.CompileBlock);
   }
 }
 
