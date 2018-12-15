@@ -70,6 +70,22 @@ export function compileParams<Locator>(
   return params.length;
 }
 
+export function params<Locator>(
+  encoder: OpcodeBuilderEncoder,
+  resolver: CompileTimeLookup<Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>,
+  params: Option<WireFormat.Core.Params>
+) {
+  if (!params) return 0;
+
+  for (let i = 0; i < params.length; i++) {
+    expr(encoder, resolver, compiler, meta, params[i]);
+  }
+
+  return params.length;
+}
+
 export function expr<Locator>(
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,

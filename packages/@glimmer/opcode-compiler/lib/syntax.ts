@@ -23,26 +23,21 @@ import C = WireFormat.Core;
 import { EMPTY_BLOCKS } from './utils';
 import {
   dynamicScope,
-  replayable,
-  replayableIf,
-  staticAttr,
   startDebugger,
-  hasBlockParams,
   helper,
-  modifier,
-  guardedAppend,
-  remoteElement,
   list,
   invokePartial,
-  params,
-  templates,
   frame,
-  inlineBlock,
 } from './opcode-builder/helpers/index';
 import { resolveLayoutForTag } from './resolver';
-import { expr } from './opcode-builder/helpers/shared';
-import { yieldBlock, invokeStaticBlock } from './opcode-builder/helpers/blocks';
-import { pushPrimitiveReference } from './opcode-builder/helpers/vm';
+import { expr, params } from './opcode-builder/helpers/shared';
+import {
+  yieldBlock,
+  invokeStaticBlock,
+  inlineBlock,
+  templates,
+} from './opcode-builder/helpers/blocks';
+import { pushPrimitiveReference, hasBlockParams } from './opcode-builder/helpers/vm';
 import {
   invokeDynamicComponent,
   invokeStaticComponent,
@@ -51,6 +46,9 @@ import {
   staticComponentHelper,
 } from './opcode-builder/helpers/components';
 import { reserveTarget, reserveMachineTarget, label } from './opcode-builder/helpers/labels';
+import { guardedAppend } from './opcode-builder/helpers/append';
+import { replayableIf, replayable } from './opcode-builder/helpers/conditional';
+import { modifier, staticAttr, remoteElement } from './opcode-builder/helpers/dom';
 
 export type TupleSyntax = WireFormat.Statement | WireFormat.TupleExpression;
 export type CompilerFunction<T extends TupleSyntax> = ((sexp: T, builder: OpcodeBuilder) => void);

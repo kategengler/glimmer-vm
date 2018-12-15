@@ -5,8 +5,8 @@ export { ATTRS_BLOCK, Macros } from './lib/syntax';
 export { compile } from './lib/compile';
 export { CompilerImpl, debugCompiler } from './lib/compiler';
 
-export { CompilableBlockImpl, CompilableProgram } from './lib/compilable-template';
-export { staticComponent } from './lib/opcode-builder/helpers/index';
+export { CompilableProgram, CompilableBlockImpl } from './lib/compilable-template';
+export { staticComponent } from './lib/opcode-builder/helpers/components';
 
 export {
   default as OpcodeBuilder,

@@ -5,14 +5,41 @@ import {
   CompilableBlock,
   SymbolTable,
   CompilableTemplate,
+  NamedBlocks,
 } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 import { Op, MachineOp, $fp } from '@glimmer/vm';
-import { EMPTY_BLOCKS } from '@glimmer/opcode-compiler';
+import { EMPTY_BLOCKS, CompilableBlockImpl, PLACEHOLDER_HANDLE } from '@glimmer/opcode-compiler';
 
 import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from '../interfaces';
+
 import { compileArgs } from './shared';
 import { primitive } from './vm';
+import { NamedBlocksImpl } from '../../utils';
+
+export function invokeStatic(
+  encoder: OpcodeBuilderEncoder,
+  compilable: CompilableTemplate,
+  isEager: boolean
+) {
+  if (isEager) {
+    let handle = compilable.compile();
+
+    // If the handle for the invoked component is not yet known (for example,
+    // because this is a recursive invocation and we're still compiling), push a
+    // function that will produce the correct handle when the heap is
+    // serialized.
+    if (handle === PLACEHOLDER_HANDLE) {
+      encoder.pushMachine(MachineOp.InvokeStatic, () => compilable.compile());
+    } else {
+      encoder.pushMachine(MachineOp.InvokeStatic, handle);
+    }
+  } else {
+    encoder.push(Op.Constant, { type: 'other', value: compilable });
+    encoder.push(Op.CompileBlock);
+    encoder.pushMachine(MachineOp.InvokeVirtual);
+  }
+}
 
 export function yieldBlock<Locator>(
   encoder: OpcodeBuilderEncoder,
@@ -105,4 +132,24 @@ export function resolveCompilable(encoder: OpcodeBuilderEncoder, isEager: boolea
   if (!isEager) {
     encoder.push(Op.CompileBlock);
   }
+}
+
+export function inlineBlock<Locator>(
+  block: WireFormat.SerializedInlineBlock,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>
+): CompilableBlockImpl<Locator> {
+  return new CompilableBlockImpl(compiler, block, meta);
+}
+
+export function templates<Locator>(
+  blocks: WireFormat.Core.Blocks,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>
+): NamedBlocks {
+  return NamedBlocksImpl.fromWireFormat(blocks, block => {
+    if (!block) return null;
+
+    return inlineBlock(block, compiler, meta);
+  });
 }

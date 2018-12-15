@@ -3,6 +3,7 @@ import { OpcodeBuilderEncoder, num, BuilderOperand, bool, str } from '../interfa
 import { PrimitiveType } from '@glimmer/program';
 import { Op } from '@glimmer/vm';
 import { Primitive } from '../../interfaces';
+import { resolveCompilable } from './blocks';
 
 export function pushPrimitiveReference(encoder: OpcodeBuilderEncoder, value: Primitive) {
   primitive(encoder, value);
@@ -51,6 +52,12 @@ export function primitive(encoder: OpcodeBuilderEncoder, _primitive: Primitive) 
 
   let immediate = sizeImmediate(encoder, (encoded << 3) | type, primitive);
   encoder.push(Op.Primitive, immediate);
+}
+
+export function hasBlockParams(encoder: OpcodeBuilderEncoder, isEager: boolean, to: number) {
+  encoder.push(Op.GetBlock, to);
+  resolveCompilable(encoder, isEager);
+  encoder.push(Op.HasBlockParams);
 }
 
 function sizeImmediate(encoder: OpcodeBuilderEncoder, shifted: number, primitive: BuilderOperand) {

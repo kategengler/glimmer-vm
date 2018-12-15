@@ -15,7 +15,7 @@ import {
   Component,
   CurryComponent,
 } from '../interfaces';
-import { resolveLayoutForTag } from '../../resolver';
+import { resolveLayoutForTag, resolveLayoutForHandle } from '../../resolver';
 import { Op, $s0, $sp, MachineOp, $s1, $v0 } from '@glimmer/vm';
 import { NamedBlocksImpl, EMPTY_BLOCKS } from '../../utils';
 import { compileArgs, expr, blockFor } from './shared';
@@ -26,12 +26,15 @@ import {
   pushSymbolTable,
   pushCompilable,
   resolveCompilable,
+  invokeStatic,
 } from './blocks';
 import { ATTRS_BLOCK } from '../../syntax';
-import { invokeStatic, replayable, withSavedRegister } from './index';
+import { withSavedRegister } from './index';
 import { reserveTarget, label, labels } from './labels';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { debugCompiler } from '../../compiler';
+import { ComponentArgs } from '../../interfaces';
+import { replayable } from './conditional';
 
 export function staticComponentHelper<Locator>(
   encoder: OpcodeBuilderEncoder,
@@ -282,6 +285,46 @@ export function wrappedComponent<Locator>(
   }
 
   return handle;
+}
+
+export function staticComponent<Locator>(
+  encoder: OpcodeBuilderEncoder,
+  resolver: CompileTimeLookup<Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>,
+  handle: number,
+  args: ComponentArgs
+): void {
+  let [params, hash, blocks] = args;
+
+  if (handle !== null) {
+    let { capabilities, compilable } = resolveLayoutForHandle(resolver, handle);
+
+    if (compilable) {
+      encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
+
+      invokeStaticComponent(encoder, resolver, compiler, meta, {
+        capabilities,
+        layout: compilable,
+        attrs: null,
+        params,
+        hash,
+        synthetic: false,
+        blocks,
+      });
+    } else {
+      encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
+
+      invokeComponent(encoder, resolver, compiler, meta, {
+        capabilities,
+        attrs: null,
+        params,
+        hash,
+        synthetic: false,
+        blocks,
+      });
+    }
+  }
 }
 
 export function invokeComponent<Locator>(
