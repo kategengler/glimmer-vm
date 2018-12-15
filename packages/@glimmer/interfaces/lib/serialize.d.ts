@@ -58,6 +58,7 @@ import ComponentCapabilities from './component-capabilities';
 import { Option } from './core';
 import { SymbolTable, ProgramSymbolTable } from './tier1/symbol-table';
 import { ComponentDefinition } from './components';
+import { ResolvedLayout } from './template';
 
 export interface CompilableProgram {
   symbolTable: ProgramSymbolTable;

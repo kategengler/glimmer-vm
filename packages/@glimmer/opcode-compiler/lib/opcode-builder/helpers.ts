@@ -6,7 +6,7 @@ import {
   NamedBlocks,
   STDLib,
   LayoutWithContext,
-  CompilationResolver,
+  CompileTimeLookup,
   ContainingMetadata,
   CompilableBlock,
 } from '@glimmer/interfaces';
@@ -41,6 +41,7 @@ import { EMPTY_BLOCKS, NamedBlocksImpl } from '../utils';
 import { CompilableBlockImpl, debugCompiler } from '@glimmer/opcode-compiler';
 import { CompilableBlockImpl as CompilableBlockInstance } from '../compilable-template';
 import { DEBUG } from '@glimmer/local-debug-flags';
+import { resolveLayoutForHandle, resolveLayoutForTag } from '../resolver';
 
 export function main(encoder: OpcodeBuilderEncoder) {
   encoder.push(Op.Main, $s0);
@@ -49,7 +50,7 @@ export function main(encoder: OpcodeBuilderEncoder) {
 
 export function guardedAppend<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   stdlib: STDLib,
@@ -133,7 +134,7 @@ export function primitive(encoder: OpcodeBuilderEncoder, _primitive: Primitive) 
 
 export function yieldBlock<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   to: number,
@@ -218,7 +219,7 @@ export function invokeStaticBlock<Locator>(
 
 export function staticComponent<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   handle: number,
@@ -227,7 +228,7 @@ export function staticComponent<Locator>(
   let [params, hash, blocks] = args;
 
   if (handle !== null) {
-    let { capabilities, compilable } = resolver.resolveLayoutForHandle(handle);
+    let { capabilities, compilable } = resolveLayoutForHandle(resolver, handle);
 
     if (compilable) {
       encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
@@ -258,14 +259,14 @@ export function staticComponent<Locator>(
 
 export function staticComponentHelper<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   tag: string,
   hash: WireFormat.Core.Hash,
   template: Option<CompilableBlock>
 ): boolean {
-  let { handle, capabilities, compilable } = resolver.resolveLayoutForTag(tag, meta.referrer);
+  let { handle, capabilities, compilable } = resolveLayoutForTag(resolver, tag, meta.referrer);
 
   if (handle !== null && capabilities !== null) {
     if (compilable) {
@@ -295,7 +296,7 @@ export function staticComponentHelper<Locator>(
 
 export function invokeStaticComponent<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { capabilities, layout, attrs, params, hash, synthetic, blocks }: StaticComponent
@@ -427,7 +428,7 @@ export function invokeStaticComponent<Locator>(
 
 export function invokeDynamicComponent<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { definition, attrs, params, hash, synthetic, blocks }: DynamicComponent
@@ -461,7 +462,7 @@ export function invokeDynamicComponent<Locator>(
 
 export function wrappedComponent<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   layout: LayoutWithContext<Locator>,
@@ -509,7 +510,7 @@ export function wrappedComponent<Locator>(
 
 export function invokeComponent<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { capabilities, attrs, params, hash, synthetic, blocks: namedBlocks, layout }: Component
@@ -600,7 +601,7 @@ export function invokeBareComponent(encoder: OpcodeBuilderEncoder) {
 
 export function curryComponent<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { definition, params, hash, synthetic }: CurryComponent
@@ -965,7 +966,7 @@ export function hasBlockParams(encoder: OpcodeBuilderEncoder, isEager: boolean, 
 
 export function expr<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   expression: WireFormat.Expression
@@ -980,7 +981,7 @@ export function expr<Locator>(
 
 export function compileArgs<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   params: Option<WireFormat.Core.Params>,
@@ -1019,7 +1020,7 @@ export function compileArgs<Locator>(
 
 export function compileParams<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   params: Option<WireFormat.Core.Params>
@@ -1035,7 +1036,7 @@ export function compileParams<Locator>(
 
 export function helper<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { handle, params, hash }: CompileHelper
@@ -1049,7 +1050,7 @@ export function helper<Locator>(
 
 export function params<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   params: Option<WireFormat.Core.Params>
@@ -1065,7 +1066,7 @@ export function params<Locator>(
 
 export function modifier<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { handle, params, hash }: CompileHelper

@@ -8,7 +8,7 @@ import {
   ComponentCapabilities,
   CompilableProgram,
   STDLib,
-  CompilationResolver,
+  CompileTimeLookup,
   ContainingMetadata,
   Encoder,
   HandleOperand,
@@ -171,7 +171,7 @@ export type OpcodeBuilderCompiler<Locator> = Compiler<
 export type OpcodeBuilderEncoder = Encoder<InstructionEncoder, Op, MachineOp>;
 
 export default interface OpcodeBuilder<Locator = unknown> {
-  readonly resolver: CompilationResolver<Locator>;
+  readonly resolver: CompileTimeLookup<Locator>;
   readonly compiler: OpcodeBuilderCompiler<Locator>;
   readonly encoder: OpcodeBuilderEncoder;
   readonly meta: ContainingMetadata<Locator>;

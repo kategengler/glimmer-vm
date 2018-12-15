@@ -11,6 +11,7 @@ import { PLACEHOLDER_HANDLE } from './interfaces';
 import { SerializedInlineBlock } from '@glimmer/wire-format';
 import { meta } from './opcode-builder/helpers';
 import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
+import { compile } from './compile';
 
 export class CompilableProgram<Locator> implements ICompilableProgram {
   private compiled: Option<number> = null;
@@ -31,7 +32,7 @@ export class CompilableProgram<Locator> implements ICompilableProgram {
 
     let { layout } = this;
 
-    return (this.compiled = this.compiler.add(layout.block.statements, meta(layout)));
+    return (this.compiled = compile(layout.block.statements, this.compiler, meta(layout)));
   }
 }
 
@@ -57,6 +58,6 @@ export class CompilableBlockImpl<Locator> implements CompilableTemplate<BlockSym
     // be known synchronously and must be linked lazily.
     this.compiled = PLACEHOLDER_HANDLE;
 
-    return (this.compiled = this.compiler.add(this.block.statements, this.meta));
+    return (this.compiled = compile(this.block.statements, this.compiler, this.meta));
   }
 }

@@ -3,7 +3,7 @@ import { BlockSymbolTable, ProgramSymbolTable, SymbolTable } from './tier1/symbo
 import ComponentCapabilities from './component-capabilities';
 import { CompileTimeConstants } from './program';
 import { ComponentDefinition } from './components';
-import { CompilableProgram } from './serialize';
+import { CompilableProgram, CompileTimeLookup } from './serialize';
 import {
   Statement,
   SerializedTemplateBlock,
@@ -92,13 +92,6 @@ export interface ContainingMetadata<Locator> {
   size: number;
 }
 
-export interface CompilationResolver<Locator> {
-  resolveLayoutForTag(tag: string, referrer: Locator): MaybeResolvedLayout;
-  resolveLayoutForHandle(handle: number): ResolvedLayout;
-  resolveHelper(name: string, referrer: Locator): Option<number>;
-  resolveModifier(name: string, referrer: Locator): Option<number>;
-}
-
 export interface BlockCompiler<Op extends number, MachineOp extends number> {
   readonly isEager: boolean;
 
@@ -107,7 +100,7 @@ export interface BlockCompiler<Op extends number, MachineOp extends number> {
   compileInline<Locator>(
     sexp: Statements.Append,
     encoder: Encoder<Locator, Op, MachineOp>,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     meta: ContainingMetadata<Locator>
   ): ['expr', Expression] | true;
 
@@ -119,7 +112,7 @@ export interface BlockCompiler<Op extends number, MachineOp extends number> {
     // TODO: Needed because it's passed into macros -- make macros not depend
     // on the builder
     encoder: Encoder<Locator, Op, MachineOp>,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     meta: ContainingMetadata<Locator>
   ): void;
 }
@@ -130,23 +123,22 @@ export interface Compiler<
   InstructionEncoder,
   Op extends number,
   MachineOp extends number
-> extends CompilationResolver<Locator> {
+> {
+  readonly resolver: CompileTimeLookup<Locator>;
   readonly stdLib: STDLib;
   readonly constants: CompileTimeConstants;
   readonly isEager: boolean;
 
-  add(statements: Statement[], meta: ContainingMetadata<Locator>): number;
   commit(size: number, encoder: CompilerBuffer): number;
 
   resolveLayoutForTag(tag: string, referrer: Opaque): MaybeResolvedLayout;
-  resolveLayoutForHandle(handle: number): ResolvedLayout;
   resolveHelper(name: string, referrer: Opaque): Option<number>;
   resolveModifier(name: string, referrer: Opaque): Option<number>;
 
   compileInline(
     sexp: Statements.Append,
     encoder: Encoder<InstructionEncoder, Op, MachineOp>,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     meta: ContainingMetadata<Locator>
   ): ['expr', Expression] | true;
 
@@ -156,7 +148,7 @@ export interface Compiler<
     hash: Core.Hash,
     blocks: NamedBlocks,
     encoder: Encoder<InstructionEncoder, Op, MachineOp>,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     compiler: Compiler<Builder, Locator, InstructionEncoder, Op, MachineOp>,
     meta: ContainingMetadata<Locator>
   ): void;

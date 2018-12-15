@@ -2,7 +2,7 @@ import { Macros, staticComponent } from '@glimmer/opcode-compiler';
 import { Option } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 import { EMPTY_BLOCKS } from '@glimmer/opcode-compiler';
-import { invokeStaticBlock } from '@glimmer/opcode-compiler';
+import { invokeStaticBlock, resolveLayoutForTag } from '@glimmer/opcode-compiler';
 
 export default class TestMacros<Locator> extends Macros<Locator> {
   constructor() {
@@ -23,7 +23,7 @@ export default class TestMacros<Locator> extends Macros<Locator> {
         params = [];
       }
 
-      let { handle } = resolver.resolveLayoutForTag(name, meta.referrer);
+      let { handle } = resolveLayoutForTag(resolver, name, meta.referrer);
 
       if (handle !== null) {
         staticComponent(encoder, resolver, compiler, meta, handle, [
@@ -38,7 +38,7 @@ export default class TestMacros<Locator> extends Macros<Locator> {
     });
 
     inlines.addMissing((name, params, hash, encoder, resolver, compiler, meta) => {
-      let { handle } = resolver.resolveLayoutForTag(name, meta.referrer);
+      let { handle } = resolveLayoutForTag(resolver, name, meta.referrer);
 
       if (handle !== null) {
         staticComponent(encoder, resolver, compiler, meta, handle, [

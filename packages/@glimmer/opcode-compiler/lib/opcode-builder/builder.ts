@@ -20,7 +20,7 @@ export default function builder<Locator>(
   meta: ContainingMetadata<Locator>
 ): OpcodeBuilder<Locator> {
   return {
-    resolver: compiler,
+    resolver: compiler.resolver,
     compiler,
     encoder: new EncoderImpl(new InstructionEncoder([]), compiler.constants),
     meta,

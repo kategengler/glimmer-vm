@@ -2,7 +2,7 @@ import {
   Option,
   Opaque,
   NamedBlocks as INamedBlocks,
-  CompilationResolver,
+  CompileTimeLookup,
   ContainingMetadata,
 } from '@glimmer/interfaces';
 import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
@@ -51,13 +51,14 @@ import {
   staticComponentHelper,
   inlineBlock,
 } from './opcode-builder/helpers';
+import { resolveLayoutForTag } from './resolver';
 
 export type TupleSyntax = WireFormat.Statement | WireFormat.TupleExpression;
 export type CompilerFunction<T extends TupleSyntax> = ((sexp: T, builder: OpcodeBuilder) => void);
 export type NewCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>
 ) => void);
@@ -97,7 +98,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
   compileSimple(
     sexp: Syntax,
     encoder: OpcodeBuilderEncoder,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     compiler: OpcodeBuilderCompiler<Locator>,
     meta: ContainingMetadata<Locator>
   ): void {
@@ -166,7 +167,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     let { referrer } = meta;
     let [, name, params, hash] = sexp;
 
-    let handle = resolver.resolveModifier(name, referrer);
+    let handle = resolver.lookupModifier(name, referrer);
 
     if (handle !== null) {
       modifier(encoder, resolver, compiler, meta, { handle, params, hash });
@@ -241,7 +242,8 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     let [, tag, _attrs, args, blocks] = sexp;
     let { referrer } = meta;
 
-    let { handle: layoutHandle, capabilities, compilable } = resolver.resolveLayoutForTag(
+    let { handle: layoutHandle, capabilities, compilable } = resolveLayoutForTag(
+      resolver,
       tag,
       referrer
     );
@@ -412,7 +414,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
 function dynamicAttr<Locator>(
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   sexp: S.DynamicAttr | S.TrustingAttr,
@@ -457,7 +459,7 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
   EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, encoder, resolver, compiler, meta) => {
     let name = sexp[1];
 
-    let handle = resolver.resolveHelper(name, meta.referrer);
+    let handle = resolver.lookupHelper(name, meta.referrer);
 
     if (handle !== null) {
       helper(encoder, resolver, compiler, meta, { handle, params: null, hash: null });
@@ -494,7 +496,7 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
       return;
     }
 
-    let handle = resolver.resolveHelper(name, meta.referrer);
+    let handle = resolver.lookupHelper(name, meta.referrer);
 
     if (handle !== null) {
       helper(encoder, resolver, compiler, meta, { handle, params, hash });
@@ -565,7 +567,7 @@ export type BlockMacro<Locator> = (
   hash: C.Hash,
   blocks: INamedBlocks,
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>
 ) => void;
@@ -576,7 +578,7 @@ export type MissingBlockMacro<Locator> = (
   hash: C.Hash,
   blocks: INamedBlocks,
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>
 ) => boolean | void;
@@ -601,7 +603,7 @@ export class Blocks<Locator> {
     hash: C.Hash,
     blocks: INamedBlocks,
     encoder: OpcodeBuilderEncoder,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     compiler: OpcodeBuilderCompiler<Locator>,
     meta: ContainingMetadata<Locator>
   ): void {
@@ -625,7 +627,7 @@ export type AppendMacro<Locator> = (
   params: Option<C.Params>,
   hash: Option<C.Hash>,
   encoder: OpcodeBuilderEncoder,
-  resolver: CompilationResolver<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>
 ) => ['expr', WireFormat.Expression] | true | false;
@@ -648,7 +650,7 @@ export class Inlines<Locator> {
     sexp: AppendSyntax,
     encoder: OpcodeBuilderEncoder,
     compiler: OpcodeBuilderCompiler<Locator>,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     meta: ContainingMetadata<Locator>
   ): ['expr', WireFormat.Expression] | true {
     let value = sexp[1];

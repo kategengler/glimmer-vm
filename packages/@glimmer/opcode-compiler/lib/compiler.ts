@@ -1,27 +1,26 @@
-import builder, { StdLib } from './opcode-builder/builder';
+import { StdLib } from './opcode-builder/builder';
 import { Macros } from './syntax';
-import { compile } from './compile';
 import { debugSlice } from './debug';
 import {
   Option,
   STDLib,
   CompileTimeConstants,
-  CompileTimeLookup,
   CompileTimeProgram,
   CompilerBuffer,
-  ResolvedLayout,
   MaybeResolvedLayout,
   CompilableProgram,
   NamedBlocks as INamedBlocks,
   ContainingMetadata,
-  CompilationResolver,
+  CompileTimeLookup,
+  ComponentCapabilities,
 } from '@glimmer/interfaces';
-import { Statements, Core, Expression, Statement } from '@glimmer/wire-format';
+import { Statements, Core, Expression } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 import { main, stdAppend } from './opcode-builder/helpers';
 import { InstructionEncoder } from '@glimmer/encoder';
 import { EncoderImpl } from './opcode-builder/encoder';
+import { resolveLayoutForHandle } from './resolver';
 
 export abstract class AbstractCompiler<
   Locator,
@@ -47,10 +46,18 @@ export abstract class AbstractCompiler<
     return this.program.constants;
   }
 
+  getCapabilities(handle: number): ComponentCapabilities {
+    return this.resolver.getCapabilities(handle);
+  }
+
+  getLayout(handle: number): Option<CompilableProgram> {
+    return this.resolver.getLayout(handle);
+  }
+
   compileInline(
     sexp: Statements.Append,
     encoder: OpcodeBuilderEncoder,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     meta: ContainingMetadata<Locator>
   ): ['expr', Expression] | true {
     let { inlines } = this.macros;
@@ -63,15 +70,11 @@ export abstract class AbstractCompiler<
     hash: Core.Hash,
     blocks: INamedBlocks,
     encoder: OpcodeBuilderEncoder,
-    resolver: CompilationResolver<Locator>,
+    resolver: CompileTimeLookup<Locator>,
     compiler: OpcodeBuilderCompiler<Locator>,
     meta: ContainingMetadata<Locator>
   ): void {
     this.macros.blocks.compile(name, params, hash, blocks, encoder, resolver, compiler, meta);
-  }
-
-  add(statements: Statement[], meta: ContainingMetadata<Locator>): number {
-    return compile(statements, builder(this, meta));
   }
 
   commit(scopeSize: number, buffer: CompilerBuffer): number {
@@ -101,24 +104,7 @@ export abstract class AbstractCompiler<
 
     if (handle === null) return { handle: null, capabilities: null, compilable: null };
 
-    return this.resolveLayoutForHandle(handle);
-  }
-
-  resolveLayoutForHandle(handle: number): ResolvedLayout {
-    let { resolver } = this;
-
-    let capabilities = resolver.getCapabilities(handle);
-    let compilable: Option<CompilableProgram> = null;
-
-    if (!capabilities.dynamicLayout) {
-      compilable = resolver.getLayout(handle)!;
-    }
-
-    return {
-      handle,
-      capabilities,
-      compilable,
-    };
+    return resolveLayoutForHandle(resolver, handle);
   }
 
   resolveModifier(name: string, referrer: Locator): Option<number> {
