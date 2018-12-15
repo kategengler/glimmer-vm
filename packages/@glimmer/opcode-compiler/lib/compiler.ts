@@ -8,11 +8,10 @@ import {
   CompileTimeProgram,
   CompilerBuffer,
   MaybeResolvedLayout,
-  CompilableProgram,
   NamedBlocks as INamedBlocks,
   ContainingMetadata,
   CompileTimeLookup,
-  ComponentCapabilities,
+  CompilerArtifacts,
 } from '@glimmer/interfaces';
 import { Statements, Core, Expression } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
@@ -22,19 +21,19 @@ import { InstructionEncoder } from '@glimmer/encoder';
 import { EncoderImpl } from './opcode-builder/encoder';
 import { resolveLayoutForHandle } from './resolver';
 
-export abstract class AbstractCompiler<
-  Locator,
-  Program extends CompileTimeProgram = CompileTimeProgram
-> implements OpcodeBuilderCompiler<Locator> {
+export class CompilerImpl<Locator, Program extends CompileTimeProgram = CompileTimeProgram>
+  implements OpcodeBuilderCompiler<Locator> {
   stdLib!: STDLib; // Set by this.initialize() in constructor
 
-  abstract isEager: boolean;
+  readonly isEager: boolean;
 
-  protected constructor(
-    public readonly macros: Macros<Locator>,
-    public readonly program: Program,
-    public readonly resolver: CompileTimeLookup<Locator>
+  constructor(
+    private macros: Macros<Locator>,
+    protected program: Program,
+    readonly resolver: CompileTimeLookup<Locator>,
+    readonly kind: 'eager' | 'lazy'
   ) {
+    this.isEager = kind === 'eager';
     this.initialize();
   }
 
@@ -46,12 +45,8 @@ export abstract class AbstractCompiler<
     return this.program.constants;
   }
 
-  getCapabilities(handle: number): ComponentCapabilities {
-    return this.resolver.getCapabilities(handle);
-  }
-
-  getLayout(handle: number): Option<CompilableProgram> {
-    return this.resolver.getLayout(handle);
+  artifacts(): CompilerArtifacts {
+    return { heap: this.program.heap, constants: this.constants };
   }
 
   compileInline(

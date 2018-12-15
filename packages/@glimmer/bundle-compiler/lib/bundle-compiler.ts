@@ -10,16 +10,15 @@ import {
   TemplateLocator,
   CompilableProgram,
   CompilableTemplate,
-  ContainingMetadata,
+  SerializedHeap,
+  ConstantPool,
 } from '@glimmer/interfaces';
 import {
   CompilableProgram as CompilableProgramInstance,
   Macros,
-  AbstractCompiler,
-  OpcodeBuilder,
-  builder,
+  CompilerImpl,
 } from '@glimmer/opcode-compiler';
-import { WriteOnlyProgram, ConstantPool, SerializedHeap } from '@glimmer/program';
+import { WriteOnlyProgram } from '@glimmer/program';
 
 import ModuleLocatorMap from './module-locator-map';
 import DebugConstants from './debug-constants';
@@ -79,23 +78,6 @@ export interface PartialTemplateLocator<Locator> extends ModuleLocator {
 // to make --declaration happy
 export { CompilableTemplate };
 
-export class EagerCompiler<Locator> extends AbstractCompiler<Locator, WriteOnlyProgram>
-  implements OpcodeBuilderCompiler<Locator> {
-  static create<Locator>(
-    macros: Macros<Locator>,
-    program: WriteOnlyProgram,
-    resolver: BundleCompilerLookup<Locator>
-  ): EagerCompiler<Locator> {
-    return new EagerCompiler(macros, program, resolver);
-  }
-
-  readonly isEager = true;
-
-  builderFor(meta: ContainingMetadata<Locator>): OpcodeBuilder<Locator> {
-    return builder(this, meta);
-  }
-}
-
 /**
  * The BundleCompiler is used to compile all of the component templates in a
  * Glimmer program into binary bytecode.
@@ -113,7 +95,7 @@ export default class BundleCompiler<Locator> {
   public compilableTemplates = new ModuleLocatorMap<CompilableProgram>();
   public compiledBlocks = new ModuleLocatorMap<SerializedTemplateBlock, TemplateLocator<Locator>>();
   public meta = new ModuleLocatorMap<Locator>();
-  public compiler: EagerCompiler<Locator>;
+  public compiler: OpcodeBuilderCompiler<Locator>;
 
   protected delegate: BundleCompilerDelegate<Locator>;
   protected macros: Macros<Locator>;
@@ -130,7 +112,7 @@ export default class BundleCompiler<Locator> {
     let program = options.program || new WriteOnlyProgram(new DebugConstants());
     this.plugins = options.plugins || [];
 
-    this.compiler = EagerCompiler.create(macros, program, this.compilerResolver());
+    this.compiler = new CompilerImpl(macros, program, this.compilerResolver(), 'eager');
   }
 
   /**
@@ -181,7 +163,7 @@ export default class BundleCompiler<Locator> {
       symbolTables.set(locator, template.symbolTable);
     });
 
-    let { heap, constants } = this.compiler.program;
+    let { heap, constants } = this.compiler.artifacts();
 
     return {
       main: main as Recast<Unique<'Handle'>, number>,

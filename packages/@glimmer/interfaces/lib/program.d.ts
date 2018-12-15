@@ -13,11 +13,18 @@ export interface Opcode {
 
 export type VMHandle = Unique<'Handle'>;
 
+export interface SerializedHeap {
+  buffer: ArrayBuffer;
+  table: number[];
+  handle: number;
+}
+
 export interface CompileTimeHeap {
   push(name: Op, op1?: number, op2?: number, op3?: number): void;
   pushPlaceholder(valueFunc: () => number): void;
   malloc(): number;
   finishMalloc(handle: number, scopeSize: number): void;
+  capture(offset?: number): SerializedHeap;
 
   // for debugging
   getaddr(handle: number): number;
@@ -33,6 +40,15 @@ export interface CompileTimeProgram {
   opcode(offset: number): Opcode;
 }
 
+export type EMPTY_ARRAY = Array<ReadonlyArray<never>>;
+
+export interface ConstantPool {
+  strings: string[];
+  arrays: number[][] | EMPTY_ARRAY;
+  handles: number[];
+  numbers: number[];
+}
+
 export interface CompileTimeConstants<Locator = unknown> {
   string(value: string): number;
   stringArray(strings: string[]): number;
@@ -40,6 +56,7 @@ export interface CompileTimeConstants<Locator = unknown> {
   handle(locator: Locator): number;
   serializable(value: unknown): number;
   number(value: number): number;
+  toPool(): ConstantPool;
 }
 
 export interface CompileTimeLazyConstants extends CompileTimeConstants {

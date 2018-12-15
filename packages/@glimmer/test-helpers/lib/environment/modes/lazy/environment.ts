@@ -27,9 +27,14 @@ import {
   ModifierDefinition,
 } from '@glimmer/runtime';
 import { Template } from '@glimmer/interfaces';
-import { templateFactory, PartialDefinition, LazyCompiler } from '@glimmer/opcode-compiler';
+import {
+  templateFactory,
+  PartialDefinition,
+  CompilerImpl,
+  OpcodeBuilderCompiler,
+} from '@glimmer/opcode-compiler';
 import { precompile } from '@glimmer/compiler';
-import { Program } from '@glimmer/program';
+import { Program, LazyConstants } from '@glimmer/program';
 import { TestDynamicScope } from '../../../environment';
 import TestEnvironment from '../../environment';
 import { ComponentKind } from '../../../render-test';
@@ -100,20 +105,24 @@ export type TestCompilationOptions = CompilationOptions<
 
 export default class LazyTestEnvironment extends TestEnvironment<TestMeta> {
   public resolver = new LazyRuntimeResolver();
-  protected program: Program<TestMeta>;
+  readonly program: Program<TestMeta>;
 
-  public compiler: LazyCompiler<TestMeta>;
+  public compiler: OpcodeBuilderCompiler<TestMeta>;
 
   constructor(options?: TestEnvironmentOptions) {
     super(testOptions(options));
 
-    this.compiler = LazyCompiler.create<TestMeta>(
+    let constants = new LazyConstants(this.resolver);
+    let program = new Program(constants);
+
+    this.compiler = new CompilerImpl(
+      new TestMacros(),
+      program,
       new LazyCompileTimeLookup(this.resolver),
-      this.resolver,
-      new TestMacros()
+      'lazy'
     );
 
-    this.program = this.compiler.program;
+    this.program = program;
 
     // recursive field, so "unsafely" set one half late (but before the resolver is actually used)
     this.resolver['compiler'] = this.compiler;

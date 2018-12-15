@@ -1,7 +1,7 @@
 import { Maybe, Opaque, Option } from './core';
 import { BlockSymbolTable, ProgramSymbolTable, SymbolTable } from './tier1/symbol-table';
 import ComponentCapabilities from './component-capabilities';
-import { CompileTimeConstants } from './program';
+import { CompileTimeConstants, CompileTimeHeap } from './program';
 import { ComponentDefinition } from './components';
 import { CompilableProgram, CompileTimeLookup } from './serialize';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@glimmer/wire-format';
 import { CompileTimeProgram } from '@glimmer/interfaces';
 import { Encoder } from './compile/encoder';
+import { Heap } from '@glimmer/program';
 
 export type CompilableBlock = CompilableTemplate<BlockSymbolTable>;
 
@@ -117,6 +118,11 @@ export interface BlockCompiler<Op extends number, MachineOp extends number> {
   ): void;
 }
 
+export interface CompilerArtifacts {
+  heap: CompileTimeHeap;
+  constants: CompileTimeConstants;
+}
+
 export interface Compiler<
   Builder,
   Locator,
@@ -152,6 +158,8 @@ export interface Compiler<
     compiler: Compiler<Builder, Locator, InstructionEncoder, Op, MachineOp>,
     meta: ContainingMetadata<Locator>
   ): void;
+
+  artifacts(): CompilerArtifacts;
 }
 
 export interface CompilableTemplate<S = SymbolTable> {

@@ -1,17 +1,16 @@
-import { Opaque, SymbolTable, RuntimeResolver, CompileTimeConstants } from '@glimmer/interfaces';
+import {
+  Opaque,
+  SymbolTable,
+  RuntimeResolver,
+  CompileTimeConstants,
+  EMPTY_ARRAY,
+  ConstantPool,
+} from '@glimmer/interfaces';
 
 const UNRESOLVED = {};
 
 export const WELL_KNOWN_EMPTY_ARRAY_POSITION = 0;
 const WELL_KNOW_EMPTY_ARRAY = Object.freeze([]);
-export type EMPTY_ARRAY = Array<ReadonlyArray<never>>;
-
-export interface ConstantPool {
-  strings: string[];
-  arrays: number[][] | EMPTY_ARRAY;
-  handles: number[];
-  numbers: number[];
-}
 
 export const enum PrimitiveType {
   NUMBER = 0b000,

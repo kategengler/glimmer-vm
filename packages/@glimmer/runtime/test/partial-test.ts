@@ -36,7 +36,7 @@ function render(template: Template, context = {}) {
   let handle = compilable.compile();
 
   let templateIterator = renderMain(
-    env.compiler.program,
+    env.program,
     env,
     self,
     new TestDynamicScope(),

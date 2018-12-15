@@ -3,7 +3,7 @@ import { assign } from '@glimmer/util';
 import { SerializedTemplateBlock, SerializedTemplateWithLazyBlock } from '@glimmer/wire-format';
 import { CompilableProgram as CompilableProgramInstance } from './compilable-template';
 import { WrappedBuilder } from './wrapped-component';
-import { LazyCompiler } from '@glimmer/opcode-compiler';
+import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 
 export interface TemplateFactory<Locator> {
   /**
@@ -23,7 +23,7 @@ export interface TemplateFactory<Locator> {
    *
    * @param {Environment} env glimmer Environment
    */
-  create(env: LazyCompiler<Locator>): Template<Locator>;
+  create(env: OpcodeBuilderCompiler<Locator>): Template<Locator>;
   /**
    * Used to create an environment specific singleton instance
    * of the template.
@@ -31,7 +31,7 @@ export interface TemplateFactory<Locator> {
    * @param {Environment} env glimmer Environment
    * @param {Object} meta environment specific injections into meta
    */
-  create<U>(env: LazyCompiler<Locator>, meta: U): Template<Locator & U>;
+  create<U>(env: OpcodeBuilderCompiler<Locator>, meta: U): Template<Locator & U>;
 }
 
 let clientId = 0;
@@ -54,7 +54,7 @@ export default function templateFactory<Locator>({
 }: SerializedTemplateWithLazyBlock<Locator>): TemplateFactory<Locator> {
   let parsedBlock: SerializedTemplateBlock;
   let id = templateId || `client-${clientId++}`;
-  let create = (compiler: LazyCompiler<Locator>, envMeta?: {}) => {
+  let create = (compiler: OpcodeBuilderCompiler<Locator>, envMeta?: {}) => {
     let newMeta = envMeta ? assign({}, envMeta, meta) : meta;
     if (!parsedBlock) {
       parsedBlock = JSON.parse(block);
@@ -74,7 +74,7 @@ class TemplateImpl<Locator> implements Template<Locator> {
   public referrer: Locator;
 
   constructor(
-    private compiler: LazyCompiler<Locator>,
+    private compiler: OpcodeBuilderCompiler<Locator>,
     private parsedLayout: Pick<LayoutWithContext<Locator>, 'id' | 'block' | 'referrer'>
   ) {
     let { block } = parsedLayout;

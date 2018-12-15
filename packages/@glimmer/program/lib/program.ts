@@ -4,15 +4,11 @@ import {
   VMHandle,
   RuntimeResolver,
   CompileTimeHeap,
+  SerializedHeap,
+  ConstantPool,
 } from '@glimmer/interfaces';
 import { DEBUG } from '@glimmer/local-debug-flags';
-import {
-  Constants,
-  WriteOnlyConstants,
-  RuntimeConstants,
-  ConstantPool,
-  RuntimeConstantsImpl,
-} from './constants';
+import { Constants, WriteOnlyConstants, RuntimeConstants, RuntimeConstantsImpl } from './constants';
 import { Opcode } from './opcode';
 import { assert } from '@glimmer/util';
 
@@ -38,12 +34,6 @@ function encodeTableInfo(size: number, scopeSize: number, state: number) {
 
 function changeState(info: number, newState: number) {
   return info | (newState << 30);
-}
-
-export interface SerializedHeap {
-  buffer: ArrayBuffer;
-  table: number[];
-  handle: number;
 }
 
 export type Placeholder = [number, () => number];

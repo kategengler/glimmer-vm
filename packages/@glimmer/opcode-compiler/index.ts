@@ -2,9 +2,8 @@ export * from './lib/interfaces';
 
 export { ATTRS_BLOCK, Macros } from './lib/syntax';
 
-export { LazyCompilerOptions, LazyCompiler } from './lib/lazy';
 export { compile } from './lib/compile';
-export { AbstractCompiler, debugCompiler } from './lib/compiler';
+export { CompilerImpl, debugCompiler } from './lib/compiler';
 
 export { CompilableBlockImpl, CompilableProgram } from './lib/compilable-template';
 export { invokeStaticBlock, staticComponent } from './lib/opcode-builder/helpers';
@@ -12,6 +11,8 @@ export { invokeStaticBlock, staticComponent } from './lib/opcode-builder/helpers
 export {
   default as OpcodeBuilder,
   OpcodeBuilderConstructor,
+  OpcodeBuilderCompiler,
+  OpcodeBuilderEncoder,
 } from './lib/opcode-builder/interfaces';
 
 export { default as builder } from './lib/opcode-builder/builder';
