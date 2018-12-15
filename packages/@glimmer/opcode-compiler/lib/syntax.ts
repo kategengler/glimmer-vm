@@ -11,6 +11,7 @@ import * as WireFormat from '@glimmer/wire-format';
 import * as ClientSide from './client-side';
 import OpcodeBuilder, {
   str,
+  handle,
   OpcodeBuilderCompiler,
   OpcodeBuilderEncoder,
 } from './opcode-builder/interfaces';
@@ -20,7 +21,6 @@ import S = WireFormat.Statements;
 import E = WireFormat.Expressions;
 import C = WireFormat.Core;
 import { EMPTY_BLOCKS } from './utils';
-import { constant } from './opcode-builder/builder';
 import {
   dynamicScope,
   pushPrimitiveReference,
@@ -49,6 +49,7 @@ import {
   templates,
   frame,
   staticComponentHelper,
+  inlineBlock,
 } from './opcode-builder/helpers';
 
 export type TupleSyntax = WireFormat.Statement | WireFormat.TupleExpression;
@@ -205,64 +206,74 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     encoder.push(Op.OpenElement, str(sexp[1]));
   });
 
-  STATEMENTS.add(Ops.DynamicComponent, (sexp: S.DynamicComponent, builder) => {
-    let [, definition, attrs, args, blocks] = sexp;
+  STATEMENTS.addSimple(
+    Ops.DynamicComponent,
+    (sexp: S.DynamicComponent, encoder, resolver, compiler, meta) => {
+      let [, definition, attrs, args, blocks] = sexp;
 
-    let attrsBlock = null;
-    if (attrs.length > 0) {
-      let wrappedAttrs: WireFormat.Statement[] = [
-        [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, true],
-        ...attrs,
-        [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, false],
-      ];
+      let attrsBlock = null;
+      if (attrs.length > 0) {
+        let wrappedAttrs: WireFormat.Statement[] = [
+          [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, true],
+          ...attrs,
+          [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, false],
+        ];
 
-      attrsBlock = builder.inlineBlock({ statements: wrappedAttrs, parameters: EMPTY_ARRAY });
+        attrsBlock = inlineBlock(
+          { statements: wrappedAttrs, parameters: EMPTY_ARRAY },
+          compiler,
+          meta
+        );
+      }
+
+      invokeDynamicComponent(encoder, resolver, compiler, meta, {
+        definition,
+        attrs: attrsBlock,
+        params: null,
+        hash: args,
+        synthetic: false,
+        blocks: templates(blocks, compiler, meta),
+      });
     }
+  );
 
-    invokeDynamicComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
-      definition,
-      attrs: attrsBlock,
-      params: null,
-      hash: args,
-      synthetic: false,
-      blocks: builder.templates(blocks),
-    });
-  });
-
-  STATEMENTS.add(Ops.Component, (sexp: S.Component, builder) => {
+  STATEMENTS.addSimple(Ops.Component, (sexp: S.Component, encoder, resolver, compiler, meta) => {
     let [, tag, _attrs, args, blocks] = sexp;
-    let { referrer } = builder.meta;
+    let { referrer } = meta;
 
-    let { handle, capabilities, compilable } = builder.resolver.resolveLayoutForTag(tag, referrer);
+    let { handle: layoutHandle, capabilities, compilable } = resolver.resolveLayoutForTag(
+      tag,
+      referrer
+    );
 
-    if (handle !== null && capabilities !== null) {
+    if (layoutHandle !== null && capabilities !== null) {
       let attrs: WireFormat.Statement[] = [
         [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, true],
         ..._attrs,
         [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, false],
       ];
-      let attrsBlock = builder.inlineBlock({ statements: attrs, parameters: EMPTY_ARRAY });
+      let attrsBlock = inlineBlock({ statements: attrs, parameters: EMPTY_ARRAY }, compiler, meta);
 
       if (compilable) {
-        builder.push(Op.PushComponentDefinition, constant.handle(handle));
-        invokeStaticComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
+        encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
+        invokeStaticComponent(encoder, resolver, compiler, meta, {
           capabilities,
           layout: compilable,
           attrs: attrsBlock,
           params: null,
           hash: args,
           synthetic: false,
-          blocks: builder.templates(blocks),
+          blocks: templates(blocks, compiler, meta),
         });
       } else {
-        builder.push(Op.PushComponentDefinition, constant.handle(handle));
-        invokeComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
+        encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
+        invokeComponent(encoder, resolver, compiler, meta, {
           capabilities,
           attrs: attrsBlock,
           params: null,
           hash: args,
           synthetic: false,
-          blocks: builder.templates(blocks),
+          blocks: templates(blocks, compiler, meta),
         });
       }
     } else {
@@ -372,7 +383,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     ClientSide.Ops.OpenComponentElement,
     (sexp: ClientSide.OpenComponentElement, encoder) => {
       encoder.push(Op.PutComponentOperations);
-      encoder.push(Op.OpenElement, constant.string(sexp[2]));
+      encoder.push(Op.OpenElement, str(sexp[2]));
     }
   );
 
@@ -451,10 +462,10 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
     if (handle !== null) {
       helper(encoder, resolver, compiler, meta, { handle, params: null, hash: null });
     } else if (meta.asPartial) {
-      encoder.push(Op.ResolveMaybeLocal, constant.string(name));
+      encoder.push(Op.ResolveMaybeLocal, str(name));
     } else {
       encoder.push(Op.GetVariable, 0);
-      encoder.push(Op.GetProperty, constant.string(name));
+      encoder.push(Op.GetProperty, str(name));
     }
   });
 
@@ -509,13 +520,13 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
         let head = path[0];
         path = path.slice(1);
 
-        encoder.push(Op.ResolveMaybeLocal, constant.string(head));
+        encoder.push(Op.ResolveMaybeLocal, str(head));
       } else {
         encoder.push(Op.GetVariable, 0);
       }
 
       for (let i = 0; i < path.length; i++) {
-        encoder.push(Op.GetProperty, constant.string(path[i]));
+        encoder.push(Op.GetProperty, str(path[i]));
       }
     }
   );

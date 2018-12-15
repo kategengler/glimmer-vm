@@ -1,4 +1,4 @@
-import { OpcodeBuilderImpl, StdOpcodeBuilder } from './opcode-builder/builder';
+import { OpcodeBuilderImpl, StdLib } from './opcode-builder/builder';
 import { Macros } from './syntax';
 import { compile } from './compile';
 import { debugSlice } from './debug';
@@ -20,6 +20,9 @@ import {
 import { Statements, Core, Expression, Statement } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from './opcode-builder/interfaces';
+import { main, stdAppend } from './opcode-builder/helpers';
+import { InstructionEncoder } from '@glimmer/encoder';
+import { EncoderImpl } from './opcode-builder/encoder';
 
 export abstract class AbstractCompiler<
   Locator,
@@ -39,7 +42,7 @@ export abstract class AbstractCompiler<
   }
 
   initialize() {
-    this.stdLib = StdOpcodeBuilder.compileStd(this);
+    this.stdLib = compileStd(this);
   }
 
   get constants(): CompileTimeConstants {
@@ -129,6 +132,23 @@ export abstract class AbstractCompiler<
   }
 
   abstract builderFor(meta: ContainingMetadata<Locator>): Builder;
+}
+
+function compileStd<Locator>(compiler: OpcodeBuilderCompiler<Locator>): StdLib {
+  let mainHandle = build(compiler, main);
+  let trustingGuardedAppend = build(compiler, encoder => stdAppend(encoder, true));
+  let cautiousGuardedAppend = build(compiler, encoder => stdAppend(encoder, false));
+  return new StdLib(mainHandle, trustingGuardedAppend, cautiousGuardedAppend);
+}
+
+function build<Locator>(
+  compiler: OpcodeBuilderCompiler<Locator>,
+  callback: (builder: OpcodeBuilderEncoder) => void
+): number {
+  let instructionEncoder = new InstructionEncoder([]);
+  let encoder = new EncoderImpl(instructionEncoder, compiler.constants);
+  callback(encoder);
+  return encoder.commit(compiler, 0);
 }
 
 export let debugCompiler: (compiler: OpcodeBuilderCompiler<unknown>, handle: number) => void;

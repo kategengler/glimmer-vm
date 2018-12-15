@@ -13,7 +13,6 @@ export {
   LazyOpcodeBuilder,
   EagerOpcodeBuilder,
   OpcodeBuilderImpl,
-  StdOpcodeBuilder,
 } from './lib/opcode-builder/builder';
 
 export {

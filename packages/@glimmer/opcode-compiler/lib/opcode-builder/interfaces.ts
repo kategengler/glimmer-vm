@@ -11,12 +11,20 @@ import {
   CompilationResolver,
   ContainingMetadata,
   Encoder,
+  HandleOperand,
+  StringArrayOperand,
+  ArrayOperand,
+  NumberOperand,
+  BooleanOperand,
+  StringOperand,
+  SerializableOperand,
+  OtherOperand,
 } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 
 import { ComponentArgs } from '../interfaces';
-import { SavedRegister, Op, MachineOp } from '@glimmer/vm';
-import { SerializedInlineBlock, Statements, Core, Expression } from '@glimmer/wire-format';
+import { Op, MachineOp } from '@glimmer/vm';
+import { Core } from '@glimmer/wire-format';
 import { Operand, InstructionEncoder } from '@glimmer/encoder';
 
 export type Label = string;
@@ -94,37 +102,16 @@ export interface CompileHelper {
   hash: Core.Hash;
 }
 
-export interface StringOperand {
-  readonly type: 'string';
-  readonly value: string;
-}
-
 export function str(value: string): StringOperand {
   return { type: 'string', value };
-}
-
-export interface BooleanOperand {
-  type: 'boolean';
-  value: boolean;
 }
 
 export function bool(value: boolean): BooleanOperand {
   return { type: 'boolean', value };
 }
 
-// For numbers that don't fit inside the operand size
-export interface NumberOperand {
-  type: 'number';
-  value: number;
-}
-
 export function num(value: number): NumberOperand {
   return { type: 'number', value };
-}
-
-export interface ArrayOperand {
-  type: 'array';
-  value: number[];
 }
 
 export function arr(value: number[]): ArrayOperand {
@@ -134,11 +121,6 @@ export function arr(value: number[]): ArrayOperand {
   };
 }
 
-export interface StringArrayOperand {
-  type: 'string-array';
-  value: string[];
-}
-
 export function strArray(value: string[]): StringArrayOperand {
   return {
     type: 'string-array',
@@ -146,23 +128,16 @@ export function strArray(value: string[]): StringArrayOperand {
   };
 }
 
-export interface HandleOperand {
-  type: 'handle';
-  value: number;
-}
-
-export interface SerializableOperand {
-  type: 'serializable';
-  value: unknown;
+export function handle(value: number): HandleOperand {
+  return { type: 'handle', value };
 }
 
 export function serializable(value: unknown): SerializableOperand {
   return { type: 'serializable', value };
 }
 
-export interface OtherOperand {
-  type: 'other';
-  value: unknown;
+export function other(value: unknown): OtherOperand {
+  return { type: 'other', value };
 }
 
 export type BuilderOperand =
@@ -206,18 +181,6 @@ export default interface OpcodeBuilder<Locator = unknown> {
   push(name: Op, ...args: BuilderOperands): void;
   pushMachine(name: MachineOp, ...args: Operands): void;
 
-  frame(options: Block): void;
-
-  toBoolean(): void;
-
-  pop(count?: number): void;
-
-  withSavedRegister(register: SavedRegister, block: Block): void;
-
-  iterate(label: string): void;
-
-  jump(label: string): void;
-
   dynamicAttr(name: string, namespace: Option<string>, trusting: boolean): void;
 
   bindDynamicScope(names: string[]): void;
@@ -228,13 +191,5 @@ export default interface OpcodeBuilder<Locator = unknown> {
     template: Option<CompilableBlock>
   ): boolean;
 
-  wrappedComponent(layout: LayoutWithContext<Locator>, attrsBlockNumber: number): number;
   staticComponent(handle: number, args: ComponentArgs): void;
-
-  // TODO: These don't seem like the right abstraction, but leaving
-  // them for now in the interest of expedience.
-  templates(blocks: Core.Blocks): NamedBlocks;
-  inlineBlock(block: SerializedInlineBlock): CompilableBlock;
-  compileInline(sexp: Statements.Append): ['expr', Expression] | true;
-  compileBlock(block: CompileBlock): void;
 }

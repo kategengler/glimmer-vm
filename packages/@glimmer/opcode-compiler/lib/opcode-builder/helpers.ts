@@ -10,7 +10,7 @@ import {
   ContainingMetadata,
   CompilableBlock,
 } from '@glimmer/interfaces';
-import { Op, $s0, MachineOp, $sp, $v0, $fp } from '@glimmer/vm';
+import { Op, $s0, MachineOp, $sp, $v0, $fp, SavedRegister, $s1 } from '@glimmer/vm';
 import { PrimitiveType } from '@glimmer/program';
 import {
   BuilderOperand,
@@ -36,8 +36,11 @@ import * as WireFormat from '@glimmer/wire-format';
 import { expressionCompiler, ATTRS_BLOCK } from '../syntax';
 import { EMPTY_ARRAY } from '@glimmer/util';
 import { EMPTY_BLOCKS, NamedBlocksImpl } from '../utils';
-import { CompilableBlockImpl } from '@glimmer/opcode-compiler';
+
+// TODO: WAT
+import { CompilableBlockImpl, debugCompiler } from '@glimmer/opcode-compiler';
 import { CompilableBlockImpl as CompilableBlockInstance } from '../compilable-template';
+import { DEBUG } from '@glimmer/local-debug-flags';
 
 export function main(encoder: OpcodeBuilderEncoder) {
   encoder.push(Op.Main, $s0);
@@ -454,6 +457,54 @@ export function invokeDynamicComponent<Locator>(
       label(encoder, 'ELSE');
     },
   });
+}
+
+export function wrappedComponent<Locator>(
+  encoder: OpcodeBuilderEncoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>,
+  layout: LayoutWithContext<Locator>,
+  attrsBlockNumber: number
+) {
+  labels(encoder, () => {
+    withSavedRegister(encoder, $s1, () => {
+      encoder.push(Op.GetComponentTagName, $s0);
+      encoder.push(Op.PrimitiveReference);
+
+      encoder.push(Op.Dup, $sp, 0);
+    });
+
+    reserveTarget(encoder, Op.JumpUnless, 'BODY');
+
+    encoder.push(Op.Fetch, $s1);
+    encoder.isComponentAttrs = true;
+    encoder.push(Op.PutComponentOperations);
+    encoder.push(Op.OpenDynamicElement);
+    encoder.push(Op.DidCreateElement, $s0);
+    yieldBlock(encoder, resolver, compiler, meta, attrsBlockNumber, []);
+    encoder.isComponentAttrs = false;
+    encoder.push(Op.FlushElement);
+
+    label(encoder, 'BODY');
+
+    invokeStaticBlock(encoder, compiler, blockFor(layout, compiler));
+
+    encoder.push(Op.Fetch, $s1);
+    reserveTarget(encoder, Op.JumpUnless, 'END');
+    encoder.push(Op.CloseElement);
+
+    label(encoder, 'END');
+    encoder.push(Op.Load, $s1);
+  });
+
+  let handle = encoder.commit(compiler, meta.size);
+
+  if (DEBUG) {
+    debugCompiler(compiler, handle);
+  }
+
+  return handle;
 }
 
 export function invokeComponent<Locator>(
@@ -1085,6 +1136,16 @@ export function frame(encoder: OpcodeBuilderEncoder, block: Block): void {
   encoder.pushMachine(MachineOp.PopFrame);
 }
 
+export function withSavedRegister(
+  encoder: OpcodeBuilderEncoder,
+  register: SavedRegister,
+  block: Block
+): void {
+  encoder.push(Op.Fetch, register);
+  block(encoder);
+  encoder.push(Op.Load, register);
+}
+
 function evalSymbols(layout: LayoutWithContext<unknown>): Option<string[]> {
   let { block } = layout;
 
@@ -1103,4 +1164,16 @@ function sizeImmediate(encoder: OpcodeBuilderEncoder, shifted: number, primitive
   }
 
   return shifted;
+}
+
+function blockFor<Locator>(
+  layout: LayoutWithContext,
+  compiler: OpcodeBuilderCompiler<Locator>
+): CompilableBlock {
+  let block = {
+    statements: layout.block.statements,
+    parameters: EMPTY_ARRAY,
+  };
+
+  return new CompilableBlockInstance(compiler, block, meta(layout));
 }
