@@ -229,11 +229,11 @@ export default class EagerRenderDelegate implements RenderDelegate {
   }
 
   private getBundleCompiler(): BundleCompiler<Locator> {
-    let macros = new TestMacros();
+    let macros = new TestMacros<Locator>();
     let delegate: EagerCompilerDelegate = new EagerCompilerDelegate(this.components, this.modules);
     this.constants = new DebugConstants();
     let program = new WriteOnlyProgram(this.constants);
-    return new BundleCompiler(delegate, { macros, program });
+    return new BundleCompiler<Locator>(delegate, { macros, program });
   }
 
   private getRuntimeProgram({

@@ -27,6 +27,7 @@ import { Attrs, createTemplate, AttrsDiff } from '../shared';
 import LazyRuntimeResolver from '../modes/lazy/runtime-resolver';
 import EagerRuntimeResolver from '../modes/eager/runtime-resolver';
 import { TestComponentDefinitionState, Locator } from '../components';
+import { TestMeta } from '../modes/lazy/environment';
 
 export class EmberishCurlyComponent extends GlimmerObject {
   public static positionalParams: string[] | string = [];
@@ -126,7 +127,7 @@ export class EmberishCurlyComponentManager
     }
 
     return resolver.compileTemplate(handle, layout.name, (source, options) => {
-      let factory = createTemplate(source);
+      let factory = createTemplate<TestMeta>(source);
       let template = factory.create(options);
       let builder = template.asWrappedLayout();
       return {

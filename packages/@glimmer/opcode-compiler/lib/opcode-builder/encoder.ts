@@ -1,11 +1,13 @@
 import { InstructionEncoder, OpcodeSize } from '@glimmer/encoder';
-import { CompileTimeConstants } from '@glimmer/interfaces';
+import { CompileTimeConstants, Encoder, Labels } from '@glimmer/interfaces';
 import { BuilderOperands, BuilderOperand, Operands } from './interfaces';
 import { MachineOp, Op } from '@glimmer/vm';
 import { LazyConstants } from '@glimmer/program';
 import { Stack, dict, expect } from '@glimmer/util';
 
-export class Labels {
+export type OpcodeBuilderLabels = Labels<InstructionEncoder>;
+
+export class LabelsImpl implements Labels<InstructionEncoder> {
   labels = dict<number>();
   targets: Array<{ at: number; target: string }> = [];
 
@@ -27,8 +29,8 @@ export class Labels {
   }
 }
 
-export class Encoder {
-  readonly labelsStack = new Stack<Labels>();
+export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
+  private labelsStack = new Stack<OpcodeBuilderLabels>();
   isComponentAttrs = false;
 
   constructor(private encoder: InstructionEncoder, readonly constants: CompileTimeConstants) {}
@@ -117,12 +119,12 @@ export class Encoder {
     }
   }
 
-  get currentLabels(): Labels {
+  get currentLabels(): OpcodeBuilderLabels {
     return expect(this.labelsStack.current, 'bug: not in a label stack');
   }
 
   startLabels() {
-    this.labelsStack.push(new Labels());
+    this.labelsStack.push(new LabelsImpl());
   }
 
   stopLabels() {

@@ -1,16 +1,14 @@
-import { Encoder } from './encoder';
 import {
   Option,
   SymbolTable,
-  CompilableBlock,
   CompilableTemplate,
   ContentType,
   NamedBlocks,
   STDLib,
-  Compiler,
   LayoutWithContext,
   CompilationResolver,
   ContainingMetadata,
+  CompilableBlock,
 } from '@glimmer/interfaces';
 import { Op, $s0, MachineOp, $sp, $v0, $fp } from '@glimmer/vm';
 import { PrimitiveType } from '@glimmer/program';
@@ -29,23 +27,27 @@ import {
   Component,
   DynamicComponent,
   serializable,
+  OpcodeBuilderEncoder,
+  OpcodeBuilderCompiler,
 } from './interfaces';
 import { OpcodeSize } from '@glimmer/encoder';
 import { Primitive, PLACEHOLDER_HANDLE, ComponentArgs } from '../interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 import { expressionCompiler, ATTRS_BLOCK } from '../syntax';
 import { EMPTY_ARRAY } from '@glimmer/util';
-import { EMPTY_BLOCKS } from '../utils';
+import { EMPTY_BLOCKS, NamedBlocksImpl } from '../utils';
+import { CompilableBlockImpl } from '@glimmer/opcode-compiler';
+import { CompilableBlockImpl as CompilableBlockInstance } from '../compilable-template';
 
-export function main(encoder: Encoder) {
+export function main(encoder: OpcodeBuilderEncoder) {
   encoder.push(Op.Main, $s0);
   invokePreparedComponent(encoder, false, false, true);
 }
 
 export function guardedAppend<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   stdlib: STDLib,
   expression: WireFormat.Expression,
@@ -60,7 +62,7 @@ export function guardedAppend<Locator>(
   encoder.pushMachine(MachineOp.PopFrame);
 }
 
-export function dynamicScope(encoder: Encoder, names: Option<string[]>, block: Block) {
+export function dynamicScope(encoder: OpcodeBuilderEncoder, names: Option<string[]>, block: Block) {
   encoder.push(Op.PushDynamicScope);
   if (names && names.length) {
     encoder.push(Op.BindDynamicScope, { type: 'string-array', value: names });
@@ -69,7 +71,7 @@ export function dynamicScope(encoder: Encoder, names: Option<string[]>, block: B
   encoder.push(Op.PopDynamicScope);
 }
 
-export function pushSymbolTable(encoder: Encoder, table: Option<SymbolTable>): void {
+export function pushSymbolTable(encoder: OpcodeBuilderEncoder, table: Option<SymbolTable>): void {
   if (table) {
     encoder.push(Op.PushSymbolTable, { type: 'serializable', value: table });
   } else {
@@ -77,12 +79,12 @@ export function pushSymbolTable(encoder: Encoder, table: Option<SymbolTable>): v
   }
 }
 
-export function pushPrimitiveReference(encoder: Encoder, value: Primitive) {
+export function pushPrimitiveReference(encoder: OpcodeBuilderEncoder, value: Primitive) {
   primitive(encoder, value);
   encoder.push(Op.PrimitiveReference);
 }
 
-export function primitive(encoder: Encoder, _primitive: Primitive) {
+export function primitive(encoder: OpcodeBuilderEncoder, _primitive: Primitive) {
   let type: PrimitiveType = PrimitiveType.NUMBER;
   let primitive: BuilderOperand;
   switch (typeof _primitive) {
@@ -127,9 +129,9 @@ export function primitive(encoder: Encoder, _primitive: Primitive) {
 }
 
 export function yieldBlock<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   to: number,
   params: Option<WireFormat.Core.Params>
@@ -143,7 +145,7 @@ export function yieldBlock<Locator>(
 }
 
 export function pushYieldableBlock(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   block: Option<CompilableBlock>,
   isEager: boolean
 ) {
@@ -160,7 +162,7 @@ export function pushYieldableBlock(
 }
 
 export function pushCompilable(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   block: Option<CompilableTemplate>,
   isEager: boolean
 ) {
@@ -173,15 +175,15 @@ export function pushCompilable(
   }
 }
 
-export function resolveCompilable(encoder: Encoder, isEager: boolean) {
+export function resolveCompilable(encoder: OpcodeBuilderEncoder, isEager: boolean) {
   if (!isEager) {
     encoder.push(Op.CompileBlock);
   }
 }
 
 export function invokeStaticBlock<Locator>(
-  encoder: Encoder,
-  compiler: Compiler<unknown, Locator>,
+  encoder: OpcodeBuilderEncoder,
+  compiler: OpcodeBuilderCompiler<Locator>,
   block: CompilableBlock,
   callerCount = 0
 ): void {
@@ -212,9 +214,9 @@ export function invokeStaticBlock<Locator>(
 }
 
 export function staticComponent<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   handle: number,
   args: ComponentArgs
@@ -251,10 +253,47 @@ export function staticComponent<Locator>(
   }
 }
 
-export function invokeStaticComponent<Locator>(
-  encoder: Encoder,
+export function staticComponentHelper<Locator>(
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>,
+  tag: string,
+  hash: WireFormat.Core.Hash,
+  template: Option<CompilableBlock>
+): boolean {
+  let { handle, capabilities, compilable } = resolver.resolveLayoutForTag(tag, meta.referrer);
+
+  if (handle !== null && capabilities !== null) {
+    if (compilable) {
+      if (hash) {
+        for (let i = 0; i < hash.length; i = i + 2) {
+          hash[i][0] = `@${hash[i][0]}`;
+        }
+      }
+
+      encoder.push(Op.PushComponentDefinition, { type: 'handle', value: handle });
+      invokeStaticComponent(encoder, resolver, compiler, meta, {
+        capabilities,
+        layout: compilable,
+        attrs: null,
+        params: null,
+        hash,
+        synthetic: false,
+        blocks: NamedBlocksImpl.from('default', template),
+      });
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function invokeStaticComponent<Locator>(
+  encoder: OpcodeBuilderEncoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { capabilities, layout, attrs, params, hash, synthetic, blocks }: StaticComponent
 ) {
@@ -313,7 +352,7 @@ export function invokeStaticComponent<Locator>(
 
     switch (symbol.charAt(0)) {
       case '&':
-        let callerBlock;
+        let callerBlock: Option<CompilableBlock>;
 
         if (symbol === ATTRS_BLOCK) {
           callerBlock = attrs;
@@ -384,9 +423,9 @@ export function invokeStaticComponent<Locator>(
 }
 
 export function invokeDynamicComponent<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { definition, attrs, params, hash, synthetic, blocks }: DynamicComponent
 ) {
@@ -418,9 +457,9 @@ export function invokeDynamicComponent<Locator>(
 }
 
 export function invokeComponent<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { capabilities, attrs, params, hash, synthetic, blocks: namedBlocks, layout }: Component
 ) {
@@ -455,11 +494,11 @@ export function invokeComponent<Locator>(
 }
 
 export function invokePreparedComponent(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   hasBlock: boolean,
   bindableBlocks: boolean,
   bindableAtNames: boolean,
-  populateLayout: Option<(encoder: Encoder) => void> = null
+  populateLayout: Option<(encoder: OpcodeBuilderEncoder) => void> = null
 ) {
   encoder.push(Op.BeginComponentTransaction);
   encoder.push(Op.PushDynamicScope);
@@ -491,7 +530,7 @@ export function invokePreparedComponent(
   encoder.push(Op.CommitComponentTransaction);
 }
 
-export function invokeBareComponent(encoder: Encoder) {
+export function invokeBareComponent(encoder: OpcodeBuilderEncoder) {
   encoder.push(Op.Fetch, $s0);
   encoder.push(Op.Dup, $sp, 1);
   encoder.push(Op.Load, $s0);
@@ -509,9 +548,9 @@ export function invokeBareComponent(encoder: Encoder) {
 }
 
 export function curryComponent<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { definition, params, hash, synthetic }: CurryComponent
 ): void {
@@ -526,7 +565,11 @@ export function curryComponent<Locator>(
   encoder.push(Op.Fetch, $v0);
 }
 
-export function invokeStatic(encoder: Encoder, compilable: CompilableTemplate, isEager: boolean) {
+export function invokeStatic(
+  encoder: OpcodeBuilderEncoder,
+  compilable: CompilableTemplate,
+  isEager: boolean
+) {
   if (isEager) {
     let handle = compilable.compile();
 
@@ -546,23 +589,23 @@ export function invokeStatic(encoder: Encoder, compilable: CompilableTemplate, i
   }
 }
 
-export function label(encoder: Encoder, name: string) {
+export function label(encoder: OpcodeBuilderEncoder, name: string) {
   encoder.currentLabels.label(name, encoder.nextPos);
 }
 
-export function labels(encoder: Encoder, block: Block): void {
+export function labels(encoder: OpcodeBuilderEncoder, block: Block): void {
   encoder.startLabels();
   block(encoder);
   encoder.stopLabels();
 }
 
-export function reserveTarget(encoder: Encoder, op: Op, target: string) {
+export function reserveTarget(encoder: OpcodeBuilderEncoder, op: Op, target: string) {
   encoder.reserve(op);
   encoder.currentLabels.target(encoder.pos, target);
 }
 
 export function reserveTargetWithOperand(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   name: Op,
   operand: number,
   target: string
@@ -571,12 +614,16 @@ export function reserveTargetWithOperand(
   encoder.currentLabels.target(encoder.pos, target);
 }
 
-export function reserveMachineTarget(encoder: Encoder, name: MachineOp, target: string) {
+export function reserveMachineTarget(
+  encoder: OpcodeBuilderEncoder,
+  name: MachineOp,
+  target: string
+) {
   encoder.reserveMachine(name);
   encoder.currentLabels.target(encoder.pos, target);
 }
 
-export function switchCases(encoder: Encoder, callback: (when: When) => void) {
+export function switchCases(encoder: OpcodeBuilderEncoder, callback: (when: When) => void) {
   // Setup the switch DSL
   let clauses: Array<{ match: number; label: string; callback: () => void }> = [];
 
@@ -688,7 +735,7 @@ export function switchCases(encoder: Encoder, callback: (when: When) => void) {
  * and the PopFrame opcode is not needed.
  */
 export function replayable(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   { args, body }: { args(): number; body(): void }
 ): void {
   // Start a new label frame, to give END and RETURN
@@ -758,7 +805,7 @@ export function replayable(
  * frame deep.
  */
 export function replayableIf(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   {
     args,
     ifTrue,
@@ -797,7 +844,7 @@ export function replayableIf(
   });
 }
 
-export function stdAppend(encoder: Encoder, trusting: boolean) {
+export function stdAppend(encoder: OpcodeBuilderEncoder, trusting: boolean) {
   encoder.push(Op.ContentType);
 
   switchCases(encoder, when => {
@@ -834,7 +881,7 @@ export function stdAppend(encoder: Encoder, trusting: boolean) {
 }
 
 export function staticAttr(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   _name: string,
   _namespace: Option<string>,
   _value: string
@@ -851,20 +898,24 @@ export function staticAttr(
   }
 }
 
-export function startDebugger(encoder: Encoder, symbols: string[], evalInfo: number[]) {
+export function startDebugger(
+  encoder: OpcodeBuilderEncoder,
+  symbols: string[],
+  evalInfo: number[]
+) {
   encoder.push(Op.Debugger, strArray(symbols), arr(evalInfo));
 }
 
-export function hasBlockParams(encoder: Encoder, isEager: boolean, to: number) {
+export function hasBlockParams(encoder: OpcodeBuilderEncoder, isEager: boolean, to: number) {
   encoder.push(Op.GetBlock, to);
   resolveCompilable(encoder, isEager);
   encoder.push(Op.HasBlockParams);
 }
 
 export function expr<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   expression: WireFormat.Expression
 ) {
@@ -877,9 +928,9 @@ export function expr<Locator>(
 }
 
 export function compileArgs<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   params: Option<WireFormat.Core.Params>,
   hash: Option<WireFormat.Core.Hash>,
@@ -916,9 +967,9 @@ export function compileArgs<Locator>(
 }
 
 export function compileParams<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   params: Option<WireFormat.Core.Params>
 ) {
@@ -932,9 +983,9 @@ export function compileParams<Locator>(
 }
 
 export function helper<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { handle, params, hash }: CompileHelper
 ) {
@@ -946,9 +997,9 @@ export function helper<Locator>(
 }
 
 export function params<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   params: Option<WireFormat.Core.Params>
 ) {
@@ -962,9 +1013,9 @@ export function params<Locator>(
 }
 
 export function modifier<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   { handle, params, hash }: CompileHelper
 ) {
@@ -974,20 +1025,20 @@ export function modifier<Locator>(
   encoder.pushMachine(MachineOp.PopFrame);
 }
 
-export function remoteElement(encoder: Encoder, block: Block): void {
+export function remoteElement(encoder: OpcodeBuilderEncoder, block: Block): void {
   encoder.push(Op.PushRemoteElement);
   block(encoder);
   encoder.push(Op.PopRemoteElement);
 }
 
-export function list(encoder: Encoder, start: string, block: Block): void {
+export function list(encoder: OpcodeBuilderEncoder, start: string, block: Block): void {
   reserveTarget(encoder, Op.EnterList, start);
   block(encoder);
   encoder.push(Op.ExitList);
 }
 
 export function invokePartial(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   referrer: unknown,
   symbols: string[],
   evalInfo: number[]
@@ -1008,13 +1059,39 @@ export function meta<Locator>(layout: LayoutWithContext<Locator>): ContainingMet
   };
 }
 
+export function inlineBlock<Locator>(
+  block: WireFormat.SerializedInlineBlock,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>
+): CompilableBlockImpl<Locator> {
+  return new CompilableBlockInstance(compiler, block, meta);
+}
+
+export function templates<Locator>(
+  blocks: WireFormat.Core.Blocks,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>
+): NamedBlocks {
+  return NamedBlocksImpl.fromWireFormat(blocks, block => {
+    if (!block) return null;
+
+    return inlineBlock(block, compiler, meta);
+  });
+}
+
+export function frame(encoder: OpcodeBuilderEncoder, block: Block): void {
+  encoder.pushMachine(MachineOp.PushFrame);
+  block(encoder);
+  encoder.pushMachine(MachineOp.PopFrame);
+}
+
 function evalSymbols(layout: LayoutWithContext<unknown>): Option<string[]> {
   let { block } = layout;
 
   return block.hasEval ? block.symbols : null;
 }
 
-function sizeImmediate(encoder: Encoder, shifted: number, primitive: BuilderOperand) {
+function sizeImmediate(encoder: OpcodeBuilderEncoder, shifted: number, primitive: BuilderOperand) {
   if (shifted >= OpcodeSize.MAX_SIZE || shifted < 0) {
     if (typeof primitive !== 'number') {
       throw new Error(

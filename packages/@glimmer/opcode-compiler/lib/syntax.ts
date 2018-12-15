@@ -1,7 +1,6 @@
 import {
   Option,
   Opaque,
-  Compiler,
   NamedBlocks as INamedBlocks,
   CompilationResolver,
   ContainingMetadata,
@@ -10,7 +9,11 @@ import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
 import { $fp, Op, $s0, MachineOp, $sp } from '@glimmer/vm';
 import * as WireFormat from '@glimmer/wire-format';
 import * as ClientSide from './client-side';
-import OpcodeBuilder, { str } from './opcode-builder/interfaces';
+import OpcodeBuilder, {
+  str,
+  OpcodeBuilderCompiler,
+  OpcodeBuilderEncoder,
+} from './opcode-builder/interfaces';
 
 import Ops = WireFormat.Ops;
 import S = WireFormat.Statements;
@@ -43,21 +46,23 @@ import {
   list,
   invokePartial,
   params,
+  templates,
+  frame,
+  staticComponentHelper,
 } from './opcode-builder/helpers';
-import { Encoder } from './opcode-builder/encoder';
 
 export type TupleSyntax = WireFormat.Statement | WireFormat.TupleExpression;
 export type CompilerFunction<T extends TupleSyntax> = ((sexp: T, builder: OpcodeBuilder) => void);
 export type NewCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>
 ) => void);
 export type LeafCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   meta: ContainingMetadata<Locator>
 ) => void);
 export type RegisteredSyntax<T extends TupleSyntax, Locator> =
@@ -90,9 +95,9 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
 
   compileSimple(
     sexp: Syntax,
-    encoder: Encoder,
+    encoder: OpcodeBuilderEncoder,
     resolver: CompilationResolver<Locator>,
-    compiler: Compiler<unknown, Locator>,
+    compiler: OpcodeBuilderCompiler<Locator>,
     meta: ContainingMetadata<Locator>
   ): void {
     let name: number = sexp![this.offset];
@@ -329,7 +334,9 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   STATEMENTS.add(Ops.Append, (sexp: S.Append, builder) => {
     let [, value, trusting] = sexp;
 
-    let returned = builder.compiler.compileInline(sexp, builder) || value;
+    let returned =
+      builder.compiler.compileInline(sexp, builder.encoder, builder.resolver, builder.meta) ||
+      value;
 
     if (returned === true) return;
 
@@ -344,10 +351,19 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     );
   });
 
-  STATEMENTS.add(Ops.Block, (sexp: S.Block, builder) => {
+  STATEMENTS.addSimple(Ops.Block, (sexp: S.Block, encoder, resolver, compiler, meta) => {
     let [, name, params, hash, named] = sexp;
 
-    builder.compiler.compileBlock(name, params, hash, builder.templates(named), builder);
+    compiler.compileBlock(
+      name,
+      params,
+      hash,
+      templates(named, compiler, meta),
+      encoder,
+      resolver,
+      compiler,
+      meta
+    );
   });
 
   const CLIENT_SIDE = new Compilers<ClientSide.ClientSideStatement, unknown>(1);
@@ -384,9 +400,9 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 }
 
 function dynamicAttr<Locator>(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   resolver: CompilationResolver<Locator>,
-  compiler: Compiler<unknown, Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
   sexp: S.DynamicAttr | S.TrustingAttr,
   trusting: boolean
@@ -403,7 +419,7 @@ function dynamicAttr<Locator>(
 }
 
 export function finishDynamicAttr(
-  encoder: Encoder,
+  encoder: OpcodeBuilderEncoder,
   _name: string,
   _namespace: Option<string>,
   trusting: boolean
@@ -522,44 +538,50 @@ export function expressionCompiler(): Compilers<WireFormat.TupleExpression> {
   return EXPRESSIONS;
 }
 
-export class Macros {
-  public blocks: Blocks;
-  public inlines: Inlines;
+export class Macros<Locator> {
+  public blocks: Blocks<Locator>;
+  public inlines: Inlines<Locator>;
 
   constructor() {
-    let { blocks, inlines } = populateBuiltins();
+    let { blocks, inlines } = populateBuiltins<Locator>();
     this.blocks = blocks;
     this.inlines = inlines;
   }
 }
 
-export type BlockMacro = (
+export type BlockMacro<Locator> = (
   params: C.Params,
   hash: C.Hash,
   blocks: INamedBlocks,
-  builder: OpcodeBuilder<unknown>
+  encoder: OpcodeBuilderEncoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>
 ) => void;
 
-export type MissingBlockMacro = (
+export type MissingBlockMacro<Locator> = (
   name: string,
   params: C.Params,
   hash: C.Hash,
   blocks: INamedBlocks,
-  builder: OpcodeBuilder<unknown>
+  encoder: OpcodeBuilderEncoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>
 ) => boolean | void;
 
-export class Blocks {
+export class Blocks<Locator> {
   private names = dict<number>();
-  private funcs: BlockMacro[] = [];
-  private missing: MissingBlockMacro | undefined;
+  private funcs: BlockMacro<Locator>[] = [];
+  private missing: MissingBlockMacro<Locator> | undefined;
 
-  add(name: string, func: BlockMacro) {
-    this.funcs.push(func as BlockMacro);
+  add(name: string, func: BlockMacro<Locator>) {
+    this.funcs.push(func as BlockMacro<Locator>);
     this.names[name] = this.funcs.length - 1;
   }
 
-  addMissing(func: MissingBlockMacro) {
-    this.missing = func as MissingBlockMacro;
+  addMissing(func: MissingBlockMacro<Locator>) {
+    this.missing = func as MissingBlockMacro<Locator>;
   }
 
   compile(
@@ -567,18 +589,21 @@ export class Blocks {
     params: C.Params,
     hash: C.Hash,
     blocks: INamedBlocks,
-    builder: OpcodeBuilder
+    encoder: OpcodeBuilderEncoder,
+    resolver: CompilationResolver<Locator>,
+    compiler: OpcodeBuilderCompiler<Locator>,
+    meta: ContainingMetadata<Locator>
   ): void {
     let index = this.names[name];
 
     if (index === undefined) {
       assert(!!this.missing, `${name} not found, and no catch-all block handler was registered`);
       let func = this.missing!;
-      let handled = func(name, params, hash, blocks, builder);
+      let handled = func(name, params, hash, blocks, encoder, resolver, compiler, meta);
       assert(!!handled, `${name} not found, and the catch-all block handler didn't handle it`);
     } else {
       let func = this.funcs[index];
-      func(params, hash, blocks, builder);
+      func(params, hash, blocks, encoder, resolver, compiler, meta);
     }
   }
 }
@@ -588,26 +613,32 @@ export type AppendMacro<Locator> = (
   name: string,
   params: Option<C.Params>,
   hash: Option<C.Hash>,
-  builder: OpcodeBuilder<Locator>
+  encoder: OpcodeBuilderEncoder,
+  resolver: CompilationResolver<Locator>,
+  compiler: OpcodeBuilderCompiler<Locator>,
+  meta: ContainingMetadata<Locator>
 ) => ['expr', WireFormat.Expression] | true | false;
 
-export class Inlines {
+export class Inlines<Locator> {
   private names = dict<number>();
-  private funcs: AppendMacro<Opaque>[] = [];
-  private missing: AppendMacro<Opaque> | undefined;
+  private funcs: AppendMacro<Locator>[] = [];
+  private missing: AppendMacro<Locator> | undefined;
 
-  add<Locator>(name: string, func: AppendMacro<Locator>) {
+  add(name: string, func: AppendMacro<Locator>) {
     this.funcs.push(func as AppendMacro<Opaque>);
     this.names[name] = this.funcs.length - 1;
   }
 
-  addMissing<Locator>(func: AppendMacro<Locator>) {
+  addMissing(func: AppendMacro<Locator>) {
     this.missing = func as AppendMacro<Opaque>;
   }
 
-  compile<Locator>(
+  compile(
     sexp: AppendSyntax,
-    builder: OpcodeBuilder<Locator>
+    encoder: OpcodeBuilderEncoder,
+    compiler: OpcodeBuilderCompiler<Locator>,
+    resolver: CompilationResolver<Locator>,
+    meta: ContainingMetadata<Locator>
   ): ['expr', WireFormat.Expression] | true {
     let value = sexp[1];
 
@@ -636,11 +667,11 @@ export class Inlines {
 
     if (index === undefined && this.missing) {
       let func = this.missing;
-      let returned = func(name, params, hash, builder);
+      let returned = func(name, params, hash, encoder, resolver, compiler, meta);
       return returned === false ? ['expr', value] : returned;
     } else if (index !== undefined) {
       let func = this.funcs[index];
-      let returned = func(name, params, hash, builder);
+      let returned = func(name, params, hash, encoder, resolver, compiler, meta);
       return returned === false ? ['expr', value] : returned;
     } else {
       return ['expr', value];
@@ -648,11 +679,11 @@ export class Inlines {
   }
 }
 
-export function populateBuiltins(
-  blocks: Blocks = new Blocks(),
-  inlines: Inlines = new Inlines()
-): { blocks: Blocks; inlines: Inlines } {
-  blocks.add('if', (params, _hash, blocks, builder) => {
+export function populateBuiltins<Locator>(
+  blocks: Blocks<Locator> = new Blocks(),
+  inlines: Inlines<Locator> = new Inlines()
+): { blocks: Blocks<Locator>; inlines: Inlines<Locator> } {
+  blocks.add('if', (params, _hash, blocks, encoder, resolver, compiler, meta) => {
     //        PutArgs
     //        Test(Environment)
     //        Enter(BEGIN, END)
@@ -669,26 +700,26 @@ export function populateBuiltins(
       throw new Error(`SYNTAX ERROR: #if requires a single argument`);
     }
 
-    replayableIf(builder.encoder, {
+    replayableIf(encoder, {
       args() {
-        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
-        builder.toBoolean();
+        expr(encoder, resolver, compiler, meta, params[0]);
+        encoder.push(Op.ToBoolean);
         return 1;
       },
 
       ifTrue() {
-        invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')));
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
         }
       },
     });
   });
 
-  blocks.add('unless', (params, _hash, blocks, builder) => {
+  blocks.add('unless', (params, _hash, blocks, encoder, resolver, compiler, meta) => {
     //        PutArgs
     //        Test(Environment)
     //        Enter(BEGIN, END)
@@ -705,26 +736,26 @@ export function populateBuiltins(
       throw new Error(`SYNTAX ERROR: #unless requires a single argument`);
     }
 
-    replayableIf(builder.encoder, {
+    replayableIf(encoder, {
       args() {
-        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
-        builder.toBoolean();
+        expr(encoder, resolver, compiler, meta, params[0]);
+        encoder.push(Op.ToBoolean);
         return 1;
       },
 
       ifTrue() {
         if (blocks.has('else')) {
-          invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
         }
       },
 
       ifFalse() {
-        invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')));
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
       },
     });
   });
 
-  blocks.add('with', (params, _hash, blocks, builder) => {
+  blocks.add('with', (params, _hash, blocks, encoder, resolver, compiler, meta) => {
     //        PutArgs
     //        Test(Environment)
     //        Enter(BEGIN, END)
@@ -741,27 +772,27 @@ export function populateBuiltins(
       throw new Error(`SYNTAX ERROR: #with requires a single argument`);
     }
 
-    replayableIf(builder.encoder, {
+    replayableIf(encoder, {
       args() {
-        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
-        builder.push(Op.Dup, $sp, 0);
-        builder.toBoolean();
+        expr(encoder, resolver, compiler, meta, params[0]);
+        encoder.push(Op.Dup, $sp, 0);
+        encoder.push(Op.ToBoolean);
         return 2;
       },
 
       ifTrue() {
-        invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')), 1);
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 1);
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
         }
       },
     });
   });
 
-  blocks.add('each', (params, hash, blocks, builder) => {
+  blocks.add('each', (params, hash, blocks, encoder, resolver, compiler, meta) => {
     //         Enter(BEGIN, END)
     // BEGIN:  Noop
     //         PutArgs
@@ -785,104 +816,108 @@ export function populateBuiltins(
     // END:    Noop
     //         Exit
 
-    replayable(builder.encoder, {
+    replayable(encoder, {
       args() {
         if (hash && hash[0][0] === 'key') {
-          expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, hash[1][0]);
+          expr(encoder, resolver, compiler, meta, hash[1][0]);
         } else {
-          pushPrimitiveReference(builder.encoder, null);
+          pushPrimitiveReference(encoder, null);
         }
 
-        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
+        expr(encoder, resolver, compiler, meta, params[0]);
 
         return 2;
       },
 
       body() {
-        builder.push(Op.PutIterator);
+        encoder.push(Op.PutIterator);
 
-        reserveTarget(builder.encoder, Op.JumpUnless, 'ELSE');
+        reserveTarget(encoder, Op.JumpUnless, 'ELSE');
 
-        builder.frame(() => {
-          builder.push(Op.Dup, $fp, 1);
+        frame(encoder, () => {
+          encoder.push(Op.Dup, $fp, 1);
 
-          reserveMachineTarget(builder.encoder, MachineOp.ReturnTo, 'ITER');
-          list(builder.encoder, 'BODY', () => {
-            label(builder.encoder, 'ITER');
-            builder.iterate('BREAK');
+          reserveMachineTarget(encoder, MachineOp.ReturnTo, 'ITER');
+          list(encoder, 'BODY', () => {
+            label(encoder, 'ITER');
+            reserveTarget(encoder, Op.Iterate, 'BREAK');
 
-            label(builder.encoder, 'BODY');
-            invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')), 2);
-            builder.pop(2);
-            builder.jump('FINALLY');
+            label(encoder, 'BODY');
+            invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 2);
+            encoder.push(Op.Pop, 2);
+            reserveMachineTarget(encoder, MachineOp.Jump, 'FINALLY');
 
-            label(builder.encoder, 'BREAK');
+            label(encoder, 'BREAK');
           });
         });
 
-        builder.jump('FINALLY');
-        label(builder.encoder, 'ELSE');
+        reserveMachineTarget(encoder, MachineOp.Jump, 'FINALLY');
+        label(encoder, 'ELSE');
 
         if (blocks.has('else')) {
-          invokeStaticBlock(builder.encoder, builder.compiler, blocks.get('else')!);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
         }
       },
     });
   });
 
-  blocks.add('in-element', (params, hash, blocks, builder) => {
+  blocks.add('in-element', (params, hash, blocks, encoder, resolver, compiler, meta) => {
     if (!params || params.length !== 1) {
       throw new Error(`SYNTAX ERROR: #in-element requires a single argument`);
     }
 
-    replayableIf(builder.encoder, {
+    replayableIf(encoder, {
       args() {
         let [keys, values] = hash!;
 
         for (let i = 0; i < keys.length; i++) {
           let key = keys[i];
           if (key === 'nextSibling' || key === 'guid') {
-            expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, values[i]);
+            expr(encoder, resolver, compiler, meta, values[i]);
           } else {
             throw new Error(`SYNTAX ERROR: #in-element does not take a \`${keys[0]}\` option`);
           }
         }
 
-        expr(builder.encoder, builder.resolver, builder.compiler, builder.meta, params[0]);
+        expr(encoder, resolver, compiler, meta, params[0]);
 
-        builder.push(Op.Dup, $sp, 0);
+        encoder.push(Op.Dup, $sp, 0);
 
         return 4;
       },
 
       ifTrue() {
-        remoteElement(builder.encoder, () =>
-          invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')))
+        remoteElement(encoder, () =>
+          invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')))
         );
       },
     });
   });
 
-  blocks.add('-with-dynamic-vars', (_params, hash, blocks, builder) => {
+  blocks.add('-with-dynamic-vars', (_params, hash, blocks, encoder, resolver, compiler, meta) => {
     if (hash) {
       let [names, expressions] = hash;
 
-      params(builder.encoder, builder.resolver, builder.compiler, builder.meta, expressions);
+      params(encoder, resolver, compiler, meta, expressions);
 
-      dynamicScope(builder.encoder, names, () => {
-        invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')));
+      dynamicScope(encoder, names, () => {
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
       });
     } else {
-      invokeStaticBlock(builder.encoder, builder.compiler, unwrap(blocks.get('default')));
+      invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
     }
   });
 
-  blocks.add('component', (_params, hash, blocks, builder) => {
+  blocks.add('component', (_params, hash, blocks, encoder, resolver, compiler, meta) => {
     assert(_params && _params.length, 'SYNTAX ERROR: #component requires at least one argument');
 
     let tag = _params[0];
     if (typeof tag === 'string') {
-      let returned = builder.staticComponentHelper(
+      let returned = staticComponentHelper(
+        encoder,
+        resolver,
+        compiler,
+        meta,
         _params[0] as string,
         hash,
         blocks.get('default')
@@ -891,7 +926,7 @@ export function populateBuiltins(
     }
 
     let [definition, ...params] = _params!;
-    invokeDynamicComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
+    invokeDynamicComponent(encoder, resolver, compiler, meta, {
       definition,
       attrs: null,
       params,
@@ -901,7 +936,7 @@ export function populateBuiltins(
     });
   });
 
-  inlines.add('component', (_name, _params, hash, builder) => {
+  inlines.add('component', (_name, _params, hash, encoder, resolver, compiler, meta) => {
     assert(
       _params && _params.length,
       'SYNTAX ERROR: component helper requires at least one argument'
@@ -909,12 +944,20 @@ export function populateBuiltins(
 
     let tag = _params && _params[0];
     if (typeof tag === 'string') {
-      let returned = builder.staticComponentHelper(tag as string, hash, null);
+      let returned = staticComponentHelper(
+        encoder,
+        resolver,
+        compiler,
+        meta,
+        tag as string,
+        hash,
+        null
+      );
       if (returned) return true;
     }
 
     let [definition, ...params] = _params!;
-    invokeDynamicComponent(builder.encoder, builder.resolver, builder.compiler, builder.meta, {
+    invokeDynamicComponent(encoder, resolver, compiler, meta, {
       definition,
       attrs: null,
       params,
@@ -927,10 +970,4 @@ export function populateBuiltins(
   });
 
   return { blocks, inlines };
-}
-
-export interface CompileOptions<Locator, Builder = Opaque> {
-  compiler: Compiler<Builder>;
-  asPartial: boolean;
-  referrer: Locator;
 }

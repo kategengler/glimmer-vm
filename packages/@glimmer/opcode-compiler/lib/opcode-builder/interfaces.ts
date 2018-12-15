@@ -10,21 +10,24 @@ import {
   STDLib,
   CompilationResolver,
   ContainingMetadata,
+  Encoder,
 } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 
-import { ComponentArgs, ComponentBuilder } from '../interfaces';
+import { ComponentArgs } from '../interfaces';
 import { SavedRegister, Op, MachineOp } from '@glimmer/vm';
 import { SerializedInlineBlock, Statements, Core, Expression } from '@glimmer/wire-format';
-import { Operand } from '@glimmer/encoder';
-import { Encoder } from './encoder';
+import { Operand, InstructionEncoder } from '@glimmer/encoder';
 
 export type Label = string;
 
 export type When = (match: number, callback: () => void) => void;
 
 export interface OpcodeBuilderConstructor<Locator> {
-  new (compiler: Compiler, containingLayout: LayoutWithContext): OpcodeBuilder<Locator>;
+  new (
+    compiler: OpcodeBuilderCompiler<Locator>,
+    containingLayout: LayoutWithContext
+  ): OpcodeBuilder<Locator>;
 }
 
 export type VMHandlePlaceholder = [number, () => VMHandle];
@@ -40,7 +43,7 @@ export interface Replayable {
   body(): void;
 }
 
-export type Block = (encoder: Encoder) => void;
+export type Block = (encoder: OpcodeBuilderEncoder) => void;
 
 export interface DynamicComponent {
   definition: WireFormat.Expression;
@@ -179,13 +182,24 @@ export type BuilderOperands =
   | [BuilderOperand, BuilderOperand]
   | [BuilderOperand, BuilderOperand, BuilderOperand];
 
+export type Operand = number | (() => number);
+
 export type Operands = [] | [Operand] | [Operand, Operand] | [Operand, Operand, Operand];
+
+export type OpcodeBuilderCompiler<Locator> = Compiler<
+  OpcodeBuilder<Locator>,
+  Locator,
+  InstructionEncoder,
+  Op,
+  MachineOp
+>;
+
+export type OpcodeBuilderEncoder = Encoder<InstructionEncoder, Op, MachineOp>;
 
 export default interface OpcodeBuilder<Locator = unknown> {
   readonly resolver: CompilationResolver<Locator>;
-  readonly component: ComponentBuilder;
-  readonly compiler: Compiler<this, Locator>;
-  readonly encoder: Encoder;
+  readonly compiler: OpcodeBuilderCompiler<Locator>;
+  readonly encoder: OpcodeBuilderEncoder;
   readonly meta: ContainingMetadata<Locator>;
   readonly stdLib: STDLib;
 

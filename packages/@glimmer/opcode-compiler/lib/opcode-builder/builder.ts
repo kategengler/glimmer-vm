@@ -5,7 +5,6 @@ import {
   CompileTimeConstants,
   CompileTimeLazyConstants,
   STDLib,
-  Compiler,
   LayoutWithContext,
   NamedBlocks,
   ContainingMetadata,
@@ -15,11 +14,10 @@ import { Op, $sp, $s0, $v0, MachineRegister, MachineOp, SavedRegister, $s1 } fro
 import * as WireFormat from '@glimmer/wire-format';
 import { SerializedInlineBlock, Expression } from '@glimmer/wire-format';
 
-import { ComponentArgs, ComponentBuilder } from '../interfaces';
+import { ComponentArgs } from '../interfaces';
 
-import { CompilableBlock as CompilableBlockInstance } from '../compilable-template';
+import { CompilableBlockImpl as CompilableBlockInstance } from '../compilable-template';
 
-import { ComponentBuilderImpl } from '../wrapped-component';
 import { InstructionEncoder } from '@glimmer/encoder';
 import { NamedBlocksImpl, EMPTY_BLOCKS } from '../utils';
 import OpcodeBuilder, {
@@ -33,10 +31,12 @@ import OpcodeBuilder, {
   CompileHelper,
   str,
   Operands,
+  OpcodeBuilderCompiler,
+  OpcodeBuilderEncoder,
 } from './interfaces';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { debugCompiler, AnyAbstractCompiler } from '../compiler';
-import { Encoder } from './encoder';
+import { EncoderImpl } from './encoder';
 import {
   main,
   label,
@@ -83,29 +83,32 @@ class StdLib {
 }
 
 export class StdOpcodeBuilder<Locator> {
-  static compileStd(compiler: Compiler): StdLib {
+  static compileStd<Locator>(compiler: OpcodeBuilderCompiler<Locator>): StdLib {
     let mainHandle = StdOpcodeBuilder.build(compiler, b => main(b.encoder));
     let trustingGuardedAppend = StdOpcodeBuilder.build(compiler, b => stdAppend(b.encoder, true));
     let cautiousGuardedAppend = StdOpcodeBuilder.build(compiler, b => stdAppend(b.encoder, false));
     return new StdLib(mainHandle, trustingGuardedAppend, cautiousGuardedAppend);
   }
 
-  static build(compiler: Compiler, callback: (builder: StdOpcodeBuilder<unknown>) => void): number {
+  static build<Locator>(
+    compiler: OpcodeBuilderCompiler<Locator>,
+    callback: (builder: StdOpcodeBuilder<unknown>) => void
+  ): number {
     let builder = new StdOpcodeBuilder(compiler);
     callback(builder);
     return builder.commit();
   }
 
   readonly constants: CompileTimeConstants;
-  readonly encoder: Encoder;
+  readonly encoder: OpcodeBuilderEncoder;
   protected instructionEncoder = new InstructionEncoder([]);
 
-  public compiler: Compiler<this, Locator>;
+  public compiler: OpcodeBuilderCompiler<Locator>;
 
-  constructor(compiler: Compiler, protected size = 0) {
-    this.compiler = compiler as Compiler<this>;
+  constructor(compiler: OpcodeBuilderCompiler<Locator>, protected size = 0) {
+    this.compiler = compiler;
     this.constants = compiler.constants;
-    this.encoder = new Encoder(this.instructionEncoder, this.constants);
+    this.encoder = new EncoderImpl(this.instructionEncoder, this.constants);
   }
 
   commit(): number {
@@ -130,14 +133,6 @@ export class StdOpcodeBuilder<Locator> {
   }
 
   ///
-
-  compileInline(sexp: WireFormat.Statements.Append): ['expr', Expression] | true {
-    return this.compiler.compileInline(sexp, this);
-  }
-
-  compileBlock({ name, params, hash, blocks }: CompileBlock): void {
-    this.compiler.compileBlock(name, params, hash, blocks, this);
-  }
 
   // helpers
 
@@ -170,21 +165,20 @@ export class StdOpcodeBuilder<Locator> {
   }
 }
 
-export abstract class OpcodeBuilderImpl<Locator = unknown> extends StdOpcodeBuilder<Locator>
+export abstract class OpcodeBuilderImpl<Locator> extends StdOpcodeBuilder<Locator>
   implements OpcodeBuilder<Locator> {
   public stdLib: STDLib;
-  public component: ComponentBuilder = new ComponentBuilderImpl(this);
-  readonly resolver: Compiler<this, Locator>;
+  readonly resolver: OpcodeBuilderCompiler<Locator>;
 
   abstract isEager: boolean;
 
   constructor(
-    resolver: Compiler<OpcodeBuilder<Locator>, Locator>,
+    resolver: OpcodeBuilderCompiler<Locator>,
     readonly meta: ContainingMetadata<Locator>
   ) {
     // containingLayout ? containingLayout.block.symbols.length : 0
     super(resolver, meta.size);
-    this.resolver = resolver as Compiler<this, Locator>;
+    this.resolver = resolver;
 
     this.stdLib = resolver.stdLib;
   }
@@ -197,6 +191,25 @@ export abstract class OpcodeBuilderImpl<Locator = unknown> extends StdOpcodeBuil
 
   pushMachine(name: MachineOp, ...args: Operands): void {
     this.encoder.pushMachine(name, ...args);
+  }
+
+  /// COMPILE
+
+  compileInline(sexp: WireFormat.Statements.Append): ['expr', Expression] | true {
+    return this.compiler.compileInline(sexp, this.encoder, this.compiler, this.meta);
+  }
+
+  compileBlock({ name, params, hash, blocks }: CompileBlock): void {
+    this.compiler.compileBlock(
+      name,
+      params,
+      hash,
+      blocks,
+      this.encoder,
+      this.compiler,
+      this.compiler,
+      this.meta
+    );
   }
 
   /// CONVENIENCE
@@ -397,13 +410,14 @@ export class LazyOpcodeBuilder<Locator> extends OpcodeBuilderImpl<Locator> {
   readonly isEager = false;
 }
 
-export class EagerOpcodeBuilder<Locator> extends OpcodeBuilderImpl<Locator> {
+export class EagerOpcodeBuilder<Locator> extends OpcodeBuilderImpl<Locator>
+  implements OpcodeBuilder<Locator> {
   readonly isEager = true;
 }
 
 function blockFor<Locator>(
   layout: LayoutWithContext,
-  compiler: Compiler<OpcodeBuilder<Locator>>
+  compiler: OpcodeBuilderCompiler<Locator>
 ): CompilableBlock {
   let block = {
     statements: layout.block.statements,

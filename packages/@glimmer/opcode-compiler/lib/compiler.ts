@@ -3,7 +3,6 @@ import { Macros } from './syntax';
 import { compile } from './compile';
 import { debugSlice } from './debug';
 import {
-  Compiler,
   Option,
   STDLib,
   CompileTimeConstants,
@@ -16,21 +15,23 @@ import {
   CompilableProgram,
   NamedBlocks as INamedBlocks,
   ContainingMetadata,
+  CompilationResolver,
 } from '@glimmer/interfaces';
 import { Statements, Core, Expression, Statement } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
+import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 
 export abstract class AbstractCompiler<
   Locator,
   Builder extends OpcodeBuilderImpl<Locator>,
   Program extends CompileTimeProgram = CompileTimeProgram
-> implements Compiler<Builder> {
+> implements OpcodeBuilderCompiler<Locator> {
   stdLib!: STDLib; // Set by this.initialize() in constructor
 
   abstract isEager: boolean;
 
   protected constructor(
-    public readonly macros: Macros,
+    public readonly macros: Macros<Locator>,
     public readonly program: Program,
     public readonly resolver: CompileTimeLookup<Locator>
   ) {
@@ -45,9 +46,14 @@ export abstract class AbstractCompiler<
     return this.program.constants;
   }
 
-  compileInline(sexp: Statements.Append, builder: Builder): ['expr', Expression] | true {
+  compileInline(
+    sexp: Statements.Append,
+    encoder: OpcodeBuilderEncoder,
+    resolver: CompilationResolver<Locator>,
+    meta: ContainingMetadata<Locator>
+  ): ['expr', Expression] | true {
     let { inlines } = this.macros;
-    return inlines.compile(sexp, builder);
+    return inlines.compile(sexp, encoder, this, resolver, meta);
   }
 
   compileBlock(
@@ -55,9 +61,12 @@ export abstract class AbstractCompiler<
     params: Core.Params,
     hash: Core.Hash,
     blocks: INamedBlocks,
-    builder: Builder
+    encoder: OpcodeBuilderEncoder,
+    resolver: CompilationResolver<Locator>,
+    compiler: OpcodeBuilderCompiler<Locator>,
+    meta: ContainingMetadata<Locator>
   ): void {
-    this.macros.blocks.compile(name, params, hash, blocks, builder);
+    this.macros.blocks.compile(name, params, hash, blocks, encoder, resolver, compiler, meta);
   }
 
   add(statements: Statement[], meta: ContainingMetadata<Locator>): number {
@@ -122,10 +131,10 @@ export abstract class AbstractCompiler<
   abstract builderFor(meta: ContainingMetadata<Locator>): Builder;
 }
 
-export let debugCompiler: (compiler: AnyAbstractCompiler, handle: number) => void;
+export let debugCompiler: (compiler: OpcodeBuilderCompiler<unknown>, handle: number) => void;
 
 if (DEBUG) {
-  debugCompiler = (compiler: AnyAbstractCompiler, handle: number) => {
+  debugCompiler = (compiler: OpcodeBuilderCompiler<unknown>, handle: number) => {
     let { heap } = compiler['program'];
     let start = heap.getaddr(handle);
     let end = start + heap.sizeof(handle);

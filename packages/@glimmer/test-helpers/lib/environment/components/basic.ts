@@ -9,6 +9,7 @@ import { UpdatableReference } from '@glimmer/object-reference';
 import LazyRuntimeResolver from '../modes/lazy/runtime-resolver';
 import EagerRuntimeResolver from '../modes/eager/runtime-resolver';
 import { TestComponentDefinitionState } from '../components';
+import { TestMeta } from '../modes/lazy/environment';
 
 export class BasicComponent {
   public element!: Element;
@@ -56,7 +57,7 @@ export class BasicComponentManager
 
     if (resolver instanceof LazyRuntimeResolver) {
       let compile = (source: string) => {
-        let template = createTemplate(source);
+        let template = createTemplate<TestMeta>(source);
         let layout = template.create(resolver.compiler).asLayout();
         return {
           handle: layout.compile(),

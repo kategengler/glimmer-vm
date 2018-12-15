@@ -2,13 +2,10 @@ import {
   ProgramSymbolTable,
   CompilableProgram,
   LayoutWithContext,
-  Compiler,
   Option,
 } from '@glimmer/interfaces';
 
-import { ComponentArgs, ComponentBuilder as IComponentBuilder } from './interfaces';
-
-import OpcodeBuilder from './opcode-builder/interfaces';
+import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 import { ATTRS_BLOCK } from './syntax';
 import { meta } from './opcode-builder/helpers';
 
@@ -18,7 +15,7 @@ export class WrappedBuilder<Locator> implements CompilableProgram {
   private attrsBlockNumber: number;
 
   constructor(
-    private compiler: Compiler<OpcodeBuilder<Locator>>,
+    private compiler: OpcodeBuilderCompiler<Locator>,
     private layout: LayoutWithContext<Locator>
   ) {
     let { block } = layout;
@@ -45,13 +42,5 @@ export class WrappedBuilder<Locator> implements CompilableProgram {
     let builder = this.compiler.builderFor(meta(this.layout));
 
     return (this.compiled = builder.wrappedComponent(this.layout, this.attrsBlockNumber));
-  }
-}
-
-export class ComponentBuilderImpl<Locator> implements IComponentBuilder {
-  constructor(private builder: OpcodeBuilder<Locator>) {}
-
-  static(handle: number, args: ComponentArgs) {
-    this.builder.staticComponent(handle, args);
   }
 }

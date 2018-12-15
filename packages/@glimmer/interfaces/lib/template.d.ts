@@ -13,6 +13,7 @@ import {
   SerializedInlineBlock,
 } from '@glimmer/wire-format';
 import { CompileTimeProgram } from '@glimmer/interfaces';
+import { Encoder } from './compile/encoder';
 
 export type CompilableBlock = CompilableTemplate<BlockSymbolTable>;
 
@@ -71,10 +72,10 @@ export interface ResolvedLayout {
 
 export type MaybeResolvedLayout =
   | {
-    handle: null;
-    capabilities: null;
-    compilable: null;
-  }
+      handle: null;
+      capabilities: null;
+      compilable: null;
+    }
   | ResolvedLayout;
 
 export interface NamedBlocks {
@@ -98,27 +99,38 @@ export interface CompilationResolver<Locator> {
   resolveModifier(name: string, referrer: Locator): Option<number>;
 }
 
-export interface BlockCompiler {
+export interface BlockCompiler<Op extends number, MachineOp extends number> {
   readonly isEager: boolean;
 
   // TODO: Needed because it's passed into macros -- make macros not depend
   // on the builder
-  compileInline(sexp: Statements.Append, builder: Builder): ['expr', Expression] | true;
+  compileInline<Locator>(
+    sexp: Statements.Append,
+    encoder: Encoder<Locator, Op, MachineOp>,
+    resolver: CompilationResolver<Locator>,
+    meta: ContainingMetadata<Locator>
+  ): ['expr', Expression] | true;
 
-  compileBlock(
+  compileBlock<Locator>(
     name: string,
     params: Core.Params,
     hash: Core.Hash,
     blocks: NamedBlocks,
-
     // TODO: Needed because it's passed into macros -- make macros not depend
     // on the builder
-    builder: Builder
+    encoder: Encoder<Locator, Op, MachineOp>,
+    resolver: CompilationResolver<Locator>,
+    meta: ContainingMetadata<Locator>
   ): void;
 }
 
-export interface Compiler<Builder = unknown, Locator = unknown>
-  extends CompilationResolver<Locator> {
+export interface Compiler<
+  Builder,
+  Locator,
+  InstructionEncoder,
+  Op extends number,
+  MachineOp extends number
+> extends CompilationResolver<Locator> {
   readonly stdLib: STDLib;
   readonly constants: CompileTimeConstants;
   readonly isEager: boolean;
@@ -131,13 +143,22 @@ export interface Compiler<Builder = unknown, Locator = unknown>
   resolveHelper(name: string, referrer: Opaque): Option<number>;
   resolveModifier(name: string, referrer: Opaque): Option<number>;
 
-  compileInline(sexp: Statements.Append, builder: Builder): ['expr', Expression] | true;
+  compileInline(
+    sexp: Statements.Append,
+    encoder: Encoder<InstructionEncoder, Op, MachineOp>,
+    resolver: CompilationResolver<Locator>,
+    meta: ContainingMetadata<Locator>
+  ): ['expr', Expression] | true;
+
   compileBlock(
     name: string,
     params: Core.Params,
     hash: Core.Hash,
     blocks: NamedBlocks,
-    builder: Builder
+    encoder: Encoder<InstructionEncoder, Op, MachineOp>,
+    resolver: CompilationResolver<Locator>,
+    compiler: Compiler<Builder, Locator, InstructionEncoder, Op, MachineOp>,
+    meta: ContainingMetadata<Locator>
   ): void;
   builderFor(meta: ContainingMetadata<Locator>): Builder;
 }

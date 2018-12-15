@@ -1,10 +1,4 @@
-import {
-  CompilableProgram,
-  Template,
-  Opaque,
-  Option,
-  LayoutWithContext,
-} from '@glimmer/interfaces';
+import { CompilableProgram, Template, Option, LayoutWithContext } from '@glimmer/interfaces';
 import { assign } from '@glimmer/util';
 import { SerializedTemplateBlock, SerializedTemplateWithLazyBlock } from '@glimmer/wire-format';
 import { CompilableProgram as CompilableProgramInstance } from './compilable-template';
@@ -53,14 +47,14 @@ export default function templateFactory<Locator>(
 export default function templateFactory<Locator, U>(
   serializedTemplate: SerializedTemplateWithLazyBlock<Locator>
 ): TemplateFactory<Locator & U>;
-export default function templateFactory({
+export default function templateFactory<Locator>({
   id: templateId,
   meta,
   block,
-}: SerializedTemplateWithLazyBlock<any>): TemplateFactory<{}> {
+}: SerializedTemplateWithLazyBlock<Locator>): TemplateFactory<Locator> {
   let parsedBlock: SerializedTemplateBlock;
   let id = templateId || `client-${clientId++}`;
-  let create = (compiler: LazyCompiler<Opaque>, envMeta?: {}) => {
+  let create = (compiler: LazyCompiler<Locator>, envMeta?: {}) => {
     let newMeta = envMeta ? assign({}, envMeta, meta) : meta;
     if (!parsedBlock) {
       parsedBlock = JSON.parse(block);
@@ -70,7 +64,7 @@ export default function templateFactory({
   return { id, meta, create };
 }
 
-class TemplateImpl<Locator = Opaque> implements Template<Locator> {
+class TemplateImpl<Locator> implements Template<Locator> {
   private layout: Option<CompilableProgram> = null;
   private partial: Option<CompilableProgram> = null;
   private wrappedLayout: Option<CompilableProgram> = null;

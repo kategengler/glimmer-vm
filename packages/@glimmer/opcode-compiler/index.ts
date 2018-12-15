@@ -1,13 +1,13 @@
 export * from './lib/interfaces';
 
-export { ATTRS_BLOCK, CompileOptions, Macros } from './lib/syntax';
+export { ATTRS_BLOCK, Macros } from './lib/syntax';
 
 export { LazyCompilerOptions, LazyCompiler } from './lib/lazy';
 export { compile } from './lib/compile';
 export { AbstractCompiler, AnyAbstractCompiler, debugCompiler } from './lib/compiler';
 
-export { CompilableBlock, CompilableProgram } from './lib/compilable-template';
-export { invokeStaticBlock } from './lib/opcode-builder/helpers';
+export { CompilableBlockImpl, CompilableProgram } from './lib/compilable-template';
+export { invokeStaticBlock, staticComponent } from './lib/opcode-builder/helpers';
 
 export {
   LazyOpcodeBuilder,

@@ -11,7 +11,6 @@ import {
   CompilableProgram,
   CompilableTemplate,
   ContainingMetadata,
-  Compiler,
 } from '@glimmer/interfaces';
 import {
   CompilableProgram as CompilableProgramInstance,
@@ -26,13 +25,14 @@ import DebugConstants from './debug-constants';
 import ExternalModuleTable from './external-module-table';
 import BundleCompilerDelegate from './delegate';
 import BundleCompilerLookup from './lookup';
+import { OpcodeBuilderCompiler } from '@glimmer/opcode-compiler/lib/opcode-builder/interfaces';
 
 export interface BundleCompileOptions {
   plugins: ASTPluginBuilder[];
 }
 
-export interface BundleCompilerOptions {
-  macros?: Macros;
+export interface BundleCompilerOptions<Locator> {
+  macros?: Macros<Locator>;
   plugins?: ASTPluginBuilder[];
   program?: WriteOnlyProgram;
 }
@@ -80,9 +80,9 @@ export { CompilableTemplate };
 
 export class EagerCompiler<Locator>
   extends AbstractCompiler<Locator, EagerOpcodeBuilder<Locator>, WriteOnlyProgram>
-  implements Compiler<EagerOpcodeBuilder<Locator>, Locator> {
+  implements OpcodeBuilderCompiler<Locator> {
   static create<Locator>(
-    macros: Macros,
+    macros: Macros<Locator>,
     program: WriteOnlyProgram,
     resolver: BundleCompilerLookup<Locator>
   ): EagerCompiler<Locator> {
@@ -116,11 +116,14 @@ export default class BundleCompiler<Locator> {
   public compiler: EagerCompiler<Locator>;
 
   protected delegate: BundleCompilerDelegate<Locator>;
-  protected macros: Macros;
+  protected macros: Macros<Locator>;
   protected plugins: ASTPluginBuilder[];
   protected resolver!: BundleCompilerLookup<Locator>; // Set by compilerResolver()
 
-  constructor(delegate: BundleCompilerDelegate<Locator>, options: BundleCompilerOptions = {}) {
+  constructor(
+    delegate: BundleCompilerDelegate<Locator>,
+    options: BundleCompilerOptions<Locator> = {}
+  ) {
     this.delegate = delegate;
     let macros = (this.macros = options.macros || new Macros());
 

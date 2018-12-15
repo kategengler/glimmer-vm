@@ -232,7 +232,7 @@ class Transaction {
 export interface CompilationOptions<Locator, R extends RuntimeResolver<Locator>> {
   resolver: R;
   program: Program<Locator>;
-  macros: Macros;
+  macros: Macros<Locator>;
   Builder: OpcodeBuilderConstructor<Locator>;
 }
 

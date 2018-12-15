@@ -6,6 +6,7 @@ import { createTemplate } from '../shared';
 import { BasicComponentManager } from './basic';
 import LazyRuntimeResolver from '../modes/lazy/runtime-resolver';
 import { TestComponentDefinitionState } from '../components';
+import { TestMeta } from '../modes/lazy/environment';
 
 export const STATIC_TAGLESS_CAPABILITIES = {
   dynamicLayout: false,
@@ -31,7 +32,7 @@ export class StaticTaglessComponentManager extends BasicComponentManager {
     let handle = resolver.lookup('template-source', name)!;
 
     return resolver.compileTemplate(handle, name, (source, options) => {
-      let template = createTemplate(source);
+      let template = createTemplate<TestMeta>(source);
       let layout = template.create(options).asLayout();
 
       return {

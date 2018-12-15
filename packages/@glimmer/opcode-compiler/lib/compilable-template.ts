@@ -4,20 +4,21 @@ import {
   CompilableProgram as ICompilableProgram,
   Option,
   LayoutWithContext,
-  Opaque,
-  Compiler,
   BlockSymbolTable,
   ContainingMetadata,
 } from '@glimmer/interfaces';
 import { PLACEHOLDER_HANDLE } from './interfaces';
 import { SerializedInlineBlock } from '@glimmer/wire-format';
 import { meta } from './opcode-builder/helpers';
-import OpcodeBuilder from './opcode-builder/interfaces';
+import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 
 export class CompilableProgram<Locator> implements ICompilableProgram {
   private compiled: Option<number> = null;
 
-  constructor(protected compiler: Compiler<Opaque>, protected layout: LayoutWithContext<Locator>) {}
+  constructor(
+    protected compiler: OpcodeBuilderCompiler<Locator>,
+    protected layout: LayoutWithContext<Locator>
+  ) {}
 
   get symbolTable(): ProgramSymbolTable {
     return this.layout.block;
@@ -34,11 +35,11 @@ export class CompilableProgram<Locator> implements ICompilableProgram {
   }
 }
 
-export class CompilableBlock<Locator> implements CompilableTemplate<BlockSymbolTable> {
+export class CompilableBlockImpl<Locator> implements CompilableTemplate<BlockSymbolTable> {
   private compiled: Option<number> = null;
 
   constructor(
-    private compiler: Compiler<OpcodeBuilder<Locator>, Locator>,
+    private compiler: OpcodeBuilderCompiler<Locator>,
     private block: SerializedInlineBlock,
     private meta: ContainingMetadata<Locator>
   ) {}

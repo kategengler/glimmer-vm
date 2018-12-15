@@ -19,6 +19,7 @@ import LazyRuntimeResolver from '../modes/lazy/runtime-resolver';
 import EagerRuntimeResolver from '../modes/eager/runtime-resolver';
 import {} from '@glimmer/bundle-compiler';
 import { Destroyable } from '@glimmer/util';
+import { TestMeta } from '@glimmer/test-helpers';
 
 export const EMBERISH_GLIMMER_CAPABILITIES = {
   ...BASIC_CAPABILITIES,
@@ -83,7 +84,7 @@ export class EmberishGlimmerComponentManager
     let { name, locator } = state;
     if (resolver instanceof LazyRuntimeResolver) {
       let compile = (source: string) => {
-        let template = createTemplate(source);
+        let template = createTemplate<TestMeta>(source);
         let layout = template.create(resolver.compiler).asLayout();
 
         return {

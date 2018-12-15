@@ -282,7 +282,7 @@ export default class LazyTestEnvironment extends TestEnvironment<TestMeta> {
 
   preprocess(template: string, meta?: TestMeta): Template<TestMeta> {
     let wrapper = JSON.parse(precompile(template));
-    let factory = templateFactory(wrapper);
+    let factory = templateFactory<TestMeta>(wrapper);
     return factory.create(this.compiler, meta || DEFAULT_TEST_META);
   }
 

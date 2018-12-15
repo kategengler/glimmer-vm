@@ -1,4 +1,5 @@
 export * from './lib/core';
+export * from './lib/compile';
 export * from './lib/components';
 export * from './lib/dom/tree-construction';
 export * from './lib/dom/bounds';
