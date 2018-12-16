@@ -22,7 +22,7 @@ export default function builder<Locator>(
   return {
     resolver: compiler.resolver,
     compiler,
-    encoder: new EncoderImpl(new InstructionEncoder([]), compiler.constants),
+    encoder: new EncoderImpl(new InstructionEncoder([]), compiler.constants, compiler.stdLib),
     meta,
     stdLib: compiler.stdLib,
   };

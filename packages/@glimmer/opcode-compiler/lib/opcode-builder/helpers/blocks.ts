@@ -42,14 +42,14 @@ export function invokeStatic(
 }
 
 export function yieldBlock<Locator>(
+  to: number,
+  params: Option<WireFormat.Core.Params>,
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>,
-  to: number,
-  params: Option<WireFormat.Core.Params>
+  meta: ContainingMetadata<Locator>
 ) {
-  compileArgs(encoder, resolver, compiler, meta, params, null, EMPTY_BLOCKS, false);
+  compileArgs(params, null, EMPTY_BLOCKS, false, encoder, resolver, meta, compiler.isEager);
   encoder.push(Op.GetBlock, to);
   if (!compiler.isEager) encoder.push(Op.CompileBlock);
   encoder.push(Op.InvokeYield);

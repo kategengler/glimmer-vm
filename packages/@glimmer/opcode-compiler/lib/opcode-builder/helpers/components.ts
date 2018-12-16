@@ -34,6 +34,7 @@ import { debugCompiler } from '../../compiler';
 import { ComponentArgs } from '../../interfaces';
 import { replayable } from './conditional';
 import { withSavedRegister } from './vm';
+import { EMPTY_ARRAY } from '@glimmer/util';
 
 export function staticComponentHelper<Locator>(
   encoder: OpcodeBuilderEncoder,
@@ -104,7 +105,7 @@ export function invokeStaticComponent<Locator>(
 
   if (capabilities.createArgs) {
     encoder.pushMachine(MachineOp.PushFrame);
-    compileArgs(encoder, resolver, compiler, meta, null, hash, EMPTY_BLOCKS, synthetic);
+    compileArgs(null, hash, EMPTY_BLOCKS, synthetic, encoder, resolver, meta, compiler.isEager);
   }
 
   encoder.push(Op.BeginComponentTransaction);
@@ -167,7 +168,7 @@ export function invokeStaticComponent<Locator>(
         let index = keys.indexOf(lookupName);
 
         if (index !== -1) {
-          expr(encoder, resolver, compiler, meta, values[index]);
+          expr(values[index], encoder, resolver, meta, compiler.isEager);
           bindings.push({ symbol: i + 1, isBlock: false });
         }
 
@@ -213,7 +214,7 @@ export function invokeDynamicComponent<Locator>(
 ) {
   replayable(encoder, {
     args: () => {
-      expr(encoder, resolver, compiler, meta, definition);
+      expr(definition, encoder, resolver, meta, compiler.isEager);
       encoder.push(Op.Dup, $sp, 0);
       return 2;
     },
@@ -261,7 +262,7 @@ export function wrappedComponent<Locator>(
     encoder.push(Op.PutComponentOperations);
     encoder.push(Op.OpenDynamicElement);
     encoder.push(Op.DidCreateElement, $s0);
-    yieldBlock(encoder, resolver, compiler, meta, attrsBlockNumber, []);
+    yieldBlock(attrsBlockNumber, EMPTY_ARRAY, encoder, resolver, compiler, meta);
     encoder.isComponentAttrs = false;
     encoder.push(Op.FlushElement);
 
@@ -345,7 +346,7 @@ export function invokeComponent<Locator>(
 
   let blocks = namedBlocks.with('attrs', attrs);
 
-  compileArgs(encoder, resolver, compiler, meta, params, hash, blocks, synthetic);
+  compileArgs(params, hash, blocks, synthetic, encoder, resolver, meta, compiler.isEager);
   encoder.push(Op.PrepareArgs, $s0);
 
   invokePreparedComponent(encoder, blocks.has('default'), bindableBlocks, bindableAtNames, () => {
@@ -420,16 +421,16 @@ export function invokeBareComponent(encoder: OpcodeBuilderEncoder) {
 export function curryComponent<Locator>(
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,
-  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
+  isEager: boolean,
   { definition, params, hash, synthetic }: CurryComponent
 ): void {
   let referrer = meta.referrer;
 
   encoder.pushMachine(MachineOp.PushFrame);
-  compileArgs(encoder, resolver, compiler, meta, params, hash, EMPTY_BLOCKS, synthetic);
+  compileArgs(params, hash, EMPTY_BLOCKS, synthetic, encoder, resolver, meta, isEager);
   encoder.push(Op.CaptureArgs);
-  expr(encoder, resolver, compiler, meta, definition);
+  expr(definition, encoder, resolver, meta, isEager);
   encoder.push(Op.CurryComponent, { type: 'serializable', value: referrer });
   encoder.pushMachine(MachineOp.PopFrame);
   encoder.push(Op.Fetch, $v0);

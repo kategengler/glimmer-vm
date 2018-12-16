@@ -1,7 +1,7 @@
 import { CompileTimeConstants } from '../program';
 import { Dict } from '../core';
 import { BuilderOperands, Operands, BuilderOperand } from './operands';
-import { Compiler } from '../template';
+import { Compiler, STDLib } from '../template';
 
 export interface Labels<InstructionEncoder> {
   readonly labels: Dict<number>;
@@ -17,6 +17,7 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
   readonly constants: CompileTimeConstants;
   readonly pos: number;
   readonly nextPos: number;
+  readonly stdlib: STDLib;
 
   currentLabels: Labels<InstructionEncoder>;
 

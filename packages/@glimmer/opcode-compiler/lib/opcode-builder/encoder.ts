@@ -1,5 +1,5 @@
 import { InstructionEncoder, OpcodeSize } from '@glimmer/encoder';
-import { CompileTimeConstants, Encoder, Labels } from '@glimmer/interfaces';
+import { CompileTimeConstants, Encoder, Labels, STDLib } from '@glimmer/interfaces';
 import { BuilderOperands, BuilderOperand, Operands, OpcodeBuilderCompiler } from './interfaces';
 import { MachineOp, Op } from '@glimmer/vm';
 import { LazyConstants } from '@glimmer/program';
@@ -33,7 +33,11 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
   private labelsStack = new Stack<OpcodeBuilderLabels>();
   isComponentAttrs = false;
 
-  constructor(private encoder: InstructionEncoder, readonly constants: CompileTimeConstants) {}
+  constructor(
+    private encoder: InstructionEncoder,
+    readonly constants: CompileTimeConstants,
+    readonly stdlib: STDLib
+  ) {}
 
   get pos(): number {
     return this.encoder.typePos;

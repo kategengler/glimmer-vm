@@ -6,7 +6,6 @@ import {
   bool,
   str,
   Block,
-  OpcodeBuilderCompiler,
   CompileHelper,
   strArray,
   arr,
@@ -113,12 +112,12 @@ export function list(encoder: OpcodeBuilderEncoder, start: string, block: Block)
 export function helper<Locator>(
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,
-  compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>,
+  isEager: boolean,
   { handle, params, hash }: CompileHelper
 ) {
   encoder.pushMachine(MachineOp.PushFrame);
-  compileArgs(encoder, resolver, compiler, meta, params, hash, EMPTY_BLOCKS, true);
+  compileArgs(params, hash, EMPTY_BLOCKS, true, encoder, resolver, meta, isEager);
   encoder.push(Op.Helper, { type: 'handle', value: handle });
   encoder.pushMachine(MachineOp.PopFrame);
   encoder.push(Op.Fetch, $v0);
