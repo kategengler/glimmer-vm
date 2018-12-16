@@ -1,10 +1,11 @@
-import { Option, CompileTimeLookup, ContainingMetadata } from '@glimmer/interfaces';
+import { Option } from '@glimmer/interfaces';
 import { Op, MachineOp } from '@glimmer/vm';
 
 import { OpcodeBuilderEncoder, str, CompileHelper, Block } from '../interfaces';
 import { pushPrimitiveReference } from './vm';
 import { compileArgs } from './shared';
 import { EMPTY_BLOCKS } from '../../utils';
+import { ExprCompilerState } from '../../syntax';
 
 export function staticAttr(
   encoder: OpcodeBuilderEncoder,
@@ -25,14 +26,13 @@ export function staticAttr(
 }
 
 export function modifier<Locator>(
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean,
+  state: ExprCompilerState<Locator>,
   { handle, params, hash }: CompileHelper
 ) {
+  let { encoder } = state;
+
   encoder.pushMachine(MachineOp.PushFrame);
-  compileArgs(params, hash, EMPTY_BLOCKS, true, encoder, resolver, meta, isEager);
+  compileArgs(params, hash, EMPTY_BLOCKS, true, state);
   encoder.push(Op.Modifier, { type: 'handle', value: handle });
   encoder.pushMachine(MachineOp.PopFrame);
 }

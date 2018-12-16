@@ -1,22 +1,20 @@
 import { MachineOp } from '@glimmer/vm';
 
-import { CompileTimeLookup, ContainingMetadata } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 
-import { OpcodeBuilderEncoder } from '../interfaces';
 import { expr } from './shared';
+import { ExprCompilerState } from '../../syntax';
 
 export function guardedAppend<Locator>(
   expression: WireFormat.Expression,
   trusting: boolean,
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean
+  state: ExprCompilerState<Locator>
 ): void {
+  let { encoder } = state;
+
   encoder.pushMachine(MachineOp.PushFrame);
 
-  expr(expression, encoder, resolver, meta, isEager);
+  expr(expression, state);
 
   encoder.pushMachine(MachineOp.InvokeStatic, encoder.stdlib.getAppend(trusting));
 

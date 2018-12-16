@@ -1,7 +1,6 @@
 import * as WireFormat from '@glimmer/wire-format';
-import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from '../interfaces';
+import { OpcodeBuilderCompiler } from '../interfaces';
 import {
-  CompileTimeLookup,
   ContainingMetadata,
   Option,
   NamedBlocks,
@@ -9,7 +8,7 @@ import {
   LayoutWithContext,
 } from '@glimmer/interfaces';
 import { pushYieldableBlock } from './blocks';
-import { expressionCompiler } from '../../syntax';
+import { expressionCompiler, ExprCompilerState } from '../../syntax';
 import { Op } from '@glimmer/vm';
 import { EMPTY_ARRAY } from '@glimmer/util';
 import { primitive } from './vm';
@@ -20,18 +19,17 @@ export function compileArgs<Locator>(
   hash: Option<WireFormat.Core.Hash>,
   blocks: NamedBlocks,
   synthetic: boolean,
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean
+  state: ExprCompilerState<Locator>
 ): void {
+  let { encoder } = state;
+
   if (blocks.hasAny) {
-    pushYieldableBlock(encoder, blocks.get('default'), isEager);
-    pushYieldableBlock(encoder, blocks.get('else'), isEager);
-    pushYieldableBlock(encoder, blocks.get('attrs'), isEager);
+    pushYieldableBlock(encoder, blocks.get('default'));
+    pushYieldableBlock(encoder, blocks.get('else'));
+    pushYieldableBlock(encoder, blocks.get('attrs'));
   }
 
-  let count = compileParams(encoder, resolver, meta, isEager, params);
+  let count = compileParams(state, params);
 
   let flags = count << 4;
 
@@ -47,7 +45,7 @@ export function compileArgs<Locator>(
     names = hash[0];
     let val = hash[1];
     for (let i = 0; i < val.length; i++) {
-      expr(val[i], encoder, resolver, meta, isEager);
+      expr(val[i], state);
     }
   }
 
@@ -55,16 +53,13 @@ export function compileArgs<Locator>(
 }
 
 export function compileParams<Locator>(
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean,
+  state: ExprCompilerState<Locator>,
   params: Option<WireFormat.Core.Params>
 ) {
   if (!params) return 0;
 
   for (let i = 0; i < params.length; i++) {
-    expr(params[i], encoder, resolver, meta, isEager);
+    expr(params[i], state);
   }
 
   return params.length;
@@ -72,33 +67,26 @@ export function compileParams<Locator>(
 
 export function params<Locator>(
   params: Option<WireFormat.Core.Params>,
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean
+  state: ExprCompilerState<Locator>
 ) {
   if (!params) return 0;
 
   for (let i = 0; i < params.length; i++) {
-    expr(params[i], encoder, resolver, meta, isEager);
+    expr(params[i], state);
   }
 
   return params.length;
 }
 
 export function expr<Locator>(
-  // state: OpcodeBuilderState<Locator>,
   expression: WireFormat.Expression,
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean
+  state: ExprCompilerState<Locator>
 ) {
   if (Array.isArray(expression)) {
-    expressionCompiler().compile(expression, encoder, resolver, meta, isEager);
+    expressionCompiler().compile(expression, state);
   } else {
-    primitive(encoder, expression);
-    encoder.push(Op.PrimitiveReference);
+    primitive(state.encoder, expression);
+    state.encoder.push(Op.PrimitiveReference);
   }
 }
 

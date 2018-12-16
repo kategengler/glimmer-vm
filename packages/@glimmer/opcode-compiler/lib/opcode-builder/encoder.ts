@@ -36,7 +36,8 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
   constructor(
     private encoder: InstructionEncoder,
     readonly constants: CompileTimeConstants,
-    readonly stdlib: STDLib
+    readonly stdlib: STDLib,
+    readonly isEager: boolean
   ) {}
 
   get pos(): number {

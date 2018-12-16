@@ -14,9 +14,10 @@ import { PrimitiveType } from '@glimmer/program';
 import { Op, MachineOp, SavedRegister, $v0 } from '@glimmer/vm';
 import { Primitive } from '../../interfaces';
 import { reserveTarget } from './labels';
-import { CompileTimeLookup, ContainingMetadata, Option } from '@glimmer/interfaces';
+import { Option } from '@glimmer/interfaces';
 import { compileArgs } from './shared';
 import { EMPTY_BLOCKS } from '../../utils';
+import { ExprCompilerState } from '../../syntax';
 
 export function pushPrimitiveReference(encoder: OpcodeBuilderEncoder, value: Primitive) {
   primitive(encoder, value);
@@ -67,9 +68,9 @@ export function primitive(encoder: OpcodeBuilderEncoder, _primitive: Primitive) 
   encoder.push(Op.Primitive, immediate);
 }
 
-export function hasBlockParams(encoder: OpcodeBuilderEncoder, isEager: boolean, to: number) {
+export function hasBlockParams(encoder: OpcodeBuilderEncoder, to: number) {
   encoder.push(Op.GetBlock, to);
-  if (!isEager) encoder.push(Op.CompileBlock);
+  if (!encoder.isEager) encoder.push(Op.CompileBlock);
   encoder.push(Op.HasBlockParams);
 }
 
@@ -110,14 +111,13 @@ export function list(encoder: OpcodeBuilderEncoder, start: string, block: Block)
 }
 
 export function helper<Locator>(
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean,
+  state: ExprCompilerState<Locator>,
   { handle, params, hash }: CompileHelper
 ) {
+  let { encoder } = state;
+
   encoder.pushMachine(MachineOp.PushFrame);
-  compileArgs(params, hash, EMPTY_BLOCKS, true, encoder, resolver, meta, isEager);
+  compileArgs(params, hash, EMPTY_BLOCKS, true, state);
   encoder.push(Op.Helper, { type: 'handle', value: handle });
   encoder.pushMachine(MachineOp.PopFrame);
   encoder.push(Op.Fetch, $v0);

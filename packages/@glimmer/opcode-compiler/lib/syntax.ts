@@ -65,14 +65,12 @@ export type NewCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean
+  meta: ContainingMetadata<Locator>
 ) => void);
 export type LeafCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
   encoder: OpcodeBuilderEncoder,
-  meta: ContainingMetadata<Locator>,
-  isEager: boolean
+  meta: ContainingMetadata<Locator>
 ) => void);
 export type RegisteredSyntax<T extends TupleSyntax, Locator> =
   | { type: 'leaf'; f: LeafCompilerFunction<T, Locator> }
@@ -80,6 +78,12 @@ export type RegisteredSyntax<T extends TupleSyntax, Locator> =
   | { type: 'statement'; f: StatementCompilerFunction<T, Locator> };
 
 export const ATTRS_BLOCK = '&attrs';
+
+export interface ExprCompilerState<Locator> {
+  encoder: OpcodeBuilderEncoder;
+  resolver: CompileTimeLookup<Locator>;
+  meta: ContainingMetadata<Locator>;
+}
 
 export class ExpressionCompilers<Locator = unknown> {
   private names = dict<number>();
@@ -109,13 +113,7 @@ export class ExpressionCompilers<Locator = unknown> {
     this.names[name] = this.funcs.length - 1;
   }
 
-  compile(
-    sexp: WireFormat.TupleExpression,
-    encoder: OpcodeBuilderEncoder,
-    resolver: CompileTimeLookup<Locator>,
-    meta: ContainingMetadata<Locator>,
-    isEager: boolean
-  ): void {
+  compile(sexp: WireFormat.TupleExpression, state: ExprCompilerState<Locator>): void {
     let name: number = sexp![this.offset];
     let index = this.names[name];
     let func = this.funcs[index];
@@ -127,11 +125,11 @@ export class ExpressionCompilers<Locator = unknown> {
     );
 
     if (func.type === 'mini') {
-      func.f(sexp, encoder, resolver, meta, isEager);
+      func.f(sexp, state.encoder, state.resolver, state.meta);
     } else if (func.type === 'statement') {
       throw new Error(`Can't compile an expression as a statement`);
     } else {
-      func.f(sexp, encoder, meta, isEager);
+      func.f(sexp, state.encoder, state.meta);
     }
   }
 }
@@ -175,11 +173,11 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     );
 
     if (func.type === 'mini') {
-      func.f(sexp as Syntax, encoder, resolver, meta, compiler.isEager);
+      func.f(sexp as Syntax, encoder, resolver, meta);
     } else if (func.type === 'statement') {
       func.f(sexp as Syntax, encoder, resolver, compiler, meta);
     } else {
-      func.f(sexp as Syntax, encoder, meta, compiler.isEager);
+      func.f(sexp as Syntax, encoder, meta);
     }
   }
 
@@ -193,11 +191,11 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     );
 
     if (func.type === 'leaf') {
-      func.f(sexp, builder.encoder, builder.meta, builder.compiler.isEager);
+      func.f(sexp, builder.encoder, builder.meta);
     } else if (func.type === 'statement') {
       func.f(sexp, builder.encoder, builder.resolver, builder.compiler, builder.meta);
     } else {
-      func.f(sexp, builder.encoder, builder.resolver, builder.meta, builder.compiler.isEager);
+      func.f(sexp, builder.encoder, builder.resolver, builder.meta);
     }
   }
 }
@@ -227,14 +225,14 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     encoder.push(Op.FlushElement);
   });
 
-  STATEMENTS.addSimple(Ops.Modifier, (sexp: S.Modifier, encoder, resolver, meta, isEager) => {
+  STATEMENTS.addSimple(Ops.Modifier, (sexp: S.Modifier, encoder, resolver, meta) => {
     let { referrer } = meta;
     let [, name, params, hash] = sexp;
 
     let handle = resolver.lookupModifier(name, referrer);
 
     if (handle !== null) {
-      modifier(encoder, resolver, meta, isEager, { handle, params, hash });
+      modifier({ encoder, resolver, meta }, { handle, params, hash });
     } else {
       throw new Error(
         `Compile Error ${name} is not a modifier: Helpers may not be used in the element form.`
@@ -247,19 +245,13 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     staticAttr(encoder, name, namespace, value as string);
   });
 
-  STATEMENTS.addStatement(
-    Ops.DynamicAttr,
-    (sexp: S.DynamicAttr, encoder, resolver, compiler, meta) => {
-      dynamicAttr(encoder, resolver, compiler, meta, sexp, false);
-    }
-  );
+  STATEMENTS.addSimple(Ops.DynamicAttr, (sexp: S.DynamicAttr, encoder, resolver, meta) => {
+    dynamicAttr({ encoder, resolver, meta }, sexp, false);
+  });
 
-  STATEMENTS.addStatement(
-    Ops.TrustingAttr,
-    (sexp: S.DynamicAttr, encoder, resolver, compiler, meta) => {
-      dynamicAttr(encoder, resolver, compiler, meta, sexp, true);
-    }
-  );
+  STATEMENTS.addSimple(Ops.TrustingAttr, (sexp: S.DynamicAttr, encoder, resolver, meta) => {
+    dynamicAttr({ encoder, resolver, meta }, sexp, true);
+  });
 
   STATEMENTS.addLeaf(Ops.OpenElement, (sexp: S.OpenElement, encoder) => {
     encoder.push(Op.OpenElement, str(sexp[1]));
@@ -347,12 +339,12 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   });
 
-  STATEMENTS.addStatement(Ops.Partial, (sexp: S.Partial, encoder, resolver, compiler, meta) => {
+  STATEMENTS.addSimple(Ops.Partial, (sexp: S.Partial, encoder, resolver, meta) => {
     let [, name, evalInfo] = sexp;
 
     replayableIf(encoder, {
       args() {
-        expr(name, encoder, resolver, meta, compiler.isEager);
+        expr(name, { encoder, resolver, meta });
         encoder.push(Op.Dup, $sp, 0);
         return 2;
       },
@@ -416,7 +408,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
     if (returned === true) return;
 
-    guardedAppend(value, trusting, encoder, resolver, meta, compiler.isEager);
+    guardedAppend(value, trusting, { encoder, resolver, meta });
   });
 
   STATEMENTS.addStatement(Ops.Block, (sexp: S.Block, encoder, resolver, compiler, meta) => {
@@ -468,21 +460,18 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 }
 
 function dynamicAttr<Locator>(
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>,
+  state: ExprCompilerState<Locator>,
   sexp: S.DynamicAttr | S.TrustingAttr,
   trusting: boolean
 ) {
   let [, name, value, namespace] = sexp;
 
-  expr(value, encoder, resolver, meta, compiler.isEager);
+  expr(value, state);
 
   if (namespace) {
-    finishDynamicAttr(encoder, name, namespace, trusting);
+    finishDynamicAttr(state.encoder, name, namespace, trusting);
   } else {
-    finishDynamicAttr(encoder, name, null, trusting);
+    finishDynamicAttr(state.encoder, name, null, trusting);
   }
 }
 
@@ -511,13 +500,13 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
 
   const EXPRESSIONS = (_expressionCompiler = new ExpressionCompilers());
 
-  EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, encoder, resolver, meta, isEager) => {
+  EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, encoder, resolver, meta) => {
     let name = sexp[1];
 
     let handle = resolver.lookupHelper(name, meta.referrer);
 
     if (handle !== null) {
-      helper(encoder, resolver, meta, isEager, { handle, params: null, hash: null });
+      helper({ encoder, resolver, meta }, { handle, params: null, hash: null });
     } else if (meta.asPartial) {
       encoder.push(Op.ResolveMaybeLocal, str(name));
     } else {
@@ -526,15 +515,15 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     }
   });
 
-  EXPRESSIONS.addSimple(Ops.Concat, (sexp: E.Concat, encoder, resolver, compiler, meta) => {
+  EXPRESSIONS.addSimple(Ops.Concat, (sexp: E.Concat, encoder, resolver, meta) => {
     let parts = sexp[1];
     for (let i = 0; i < parts.length; i++) {
-      expr(parts[i], encoder, resolver, compiler, meta);
+      expr(parts[i], { encoder, resolver, meta });
     }
     encoder.push(Op.Concat, parts.length);
   });
 
-  EXPRESSIONS.addSimple(Ops.Helper, (sexp: E.Helper, encoder, resolver, meta, isEager) => {
+  EXPRESSIONS.addSimple(Ops.Helper, (sexp: E.Helper, encoder, resolver, meta) => {
     let [, name, params, hash] = sexp;
 
     // TODO: triage this in the WF compiler
@@ -542,19 +531,22 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
       assert(params.length, 'SYNTAX ERROR: component helper requires at least one argument');
 
       let [definition, ...restArgs] = params;
-      curryComponent(encoder, resolver, meta, isEager, {
-        definition,
-        params: restArgs,
-        hash,
-        synthetic: true,
-      });
+      curryComponent(
+        { encoder, resolver, meta },
+        {
+          definition,
+          params: restArgs,
+          hash,
+          synthetic: true,
+        }
+      );
       return;
     }
 
     let handle = resolver.lookupHelper(name, meta.referrer);
 
     if (handle !== null) {
-      helper(encoder, resolver, meta, isEager, { handle, params, hash });
+      helper({ encoder, resolver, meta }, { handle, params, hash });
     } else {
       throw new Error(`Compile Error: ${name} is not a helper`);
     }
@@ -593,8 +585,8 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     encoder.push(Op.HasBlock, sexp[1]);
   });
 
-  EXPRESSIONS.addLeaf(Ops.HasBlockParams, (sexp: E.HasBlockParams, encoder, _meta, isEager) => {
-    hasBlockParams(encoder, isEager, sexp[1]);
+  EXPRESSIONS.addLeaf(Ops.HasBlockParams, (sexp: E.HasBlockParams, encoder, _meta) => {
+    hasBlockParams(encoder, sexp[1]);
   });
 
   return EXPRESSIONS;
@@ -764,7 +756,7 @@ export function populateBuiltins<Locator>(
 
     replayableIf(encoder, {
       args() {
-        expr(params[0], encoder, resolver, meta, compiler.isEager);
+        expr(params[0], { encoder, resolver, meta });
         encoder.push(Op.ToBoolean);
         return 1;
       },
@@ -800,7 +792,7 @@ export function populateBuiltins<Locator>(
 
     replayableIf(encoder, {
       args() {
-        expr(params[0], encoder, resolver, meta, compiler.isEager);
+        expr(params[0], { encoder, resolver, meta });
         encoder.push(Op.ToBoolean);
         return 1;
       },
@@ -836,7 +828,7 @@ export function populateBuiltins<Locator>(
 
     replayableIf(encoder, {
       args() {
-        expr(params[0], encoder, resolver, meta, compiler.isEager);
+        expr(params[0], { encoder, resolver, meta });
         encoder.push(Op.Dup, $sp, 0);
         encoder.push(Op.ToBoolean);
         return 2;
@@ -881,12 +873,12 @@ export function populateBuiltins<Locator>(
     replayable(encoder, {
       args() {
         if (hash && hash[0][0] === 'key') {
-          expr(hash[1][0], encoder, resolver, meta, compiler.isEager);
+          expr(hash[1][0], { encoder, resolver, meta });
         } else {
           pushPrimitiveReference(encoder, null);
         }
 
-        expr(params[0], encoder, resolver, meta, compiler.isEager);
+        expr(params[0], { encoder, resolver, meta });
 
         return 2;
       },
@@ -935,13 +927,13 @@ export function populateBuiltins<Locator>(
         for (let i = 0; i < keys.length; i++) {
           let key = keys[i];
           if (key === 'nextSibling' || key === 'guid') {
-            expr(values[i], encoder, resolver, meta, compiler.isEager);
+            expr(values[i], { encoder, resolver, meta });
           } else {
             throw new Error(`SYNTAX ERROR: #in-element does not take a \`${keys[0]}\` option`);
           }
         }
 
-        expr(params[0], encoder, resolver, meta, compiler.isEager);
+        expr(params[0], { encoder, resolver, meta });
 
         encoder.push(Op.Dup, $sp, 0);
 
@@ -960,7 +952,7 @@ export function populateBuiltins<Locator>(
     if (hash) {
       let [names, expressions] = hash;
 
-      params(expressions, encoder, resolver, meta, compiler.isEager);
+      params(expressions, { encoder, resolver, meta });
 
       dynamicScope(encoder, names, () => {
         invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));

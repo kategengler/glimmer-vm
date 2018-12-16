@@ -49,7 +49,7 @@ export function yieldBlock<Locator>(
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>
 ) {
-  compileArgs(params, null, EMPTY_BLOCKS, false, encoder, resolver, meta, compiler.isEager);
+  compileArgs(params, null, EMPTY_BLOCKS, false, { encoder, resolver, meta });
   encoder.push(Op.GetBlock, to);
   if (!compiler.isEager) encoder.push(Op.CompileBlock);
   encoder.push(Op.InvokeYield);
@@ -57,17 +57,13 @@ export function yieldBlock<Locator>(
   encoder.pushMachine(MachineOp.PopFrame);
 }
 
-export function pushYieldableBlock(
-  encoder: OpcodeBuilderEncoder,
-  block: Option<CompilableBlock>,
-  isEager: boolean
-) {
+export function pushYieldableBlock(encoder: OpcodeBuilderEncoder, block: Option<CompilableBlock>) {
   pushSymbolTable(encoder, block && block.symbolTable);
   encoder.push(Op.PushBlockScope);
 
   if (block === null) {
     primitive(encoder, null);
-  } else if (isEager) {
+  } else if (encoder.isEager) {
     primitive(encoder, block.compile());
   } else {
     encoder.push(Op.Constant, { type: 'other', value: block });

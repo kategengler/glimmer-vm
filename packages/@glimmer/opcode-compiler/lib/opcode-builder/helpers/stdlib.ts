@@ -61,7 +61,12 @@ function build<Locator>(
   callback: (builder: OpcodeBuilderEncoder) => void
 ): number {
   let instructionEncoder = new InstructionEncoder([]);
-  let encoder = new EncoderImpl(instructionEncoder, compiler.constants, compiler.stdLib);
+  let encoder = new EncoderImpl(
+    instructionEncoder,
+    compiler.constants,
+    compiler.stdLib,
+    compiler.isEager
+  );
   callback(encoder);
   return encoder.commit(compiler, 0);
 }
