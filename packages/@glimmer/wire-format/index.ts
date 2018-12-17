@@ -101,12 +101,14 @@ export namespace Statements {
   export type CloseElement = [Opcodes.CloseElement];
   export type StaticAttr = [Opcodes.StaticAttr, str, Expression, Option<str>];
   export type DynamicAttr = [Opcodes.DynamicAttr, str, Expression, Option<str>];
+  export type ComponentAttr = [Opcodes.ComponentAttr, str, Expression, Option<str>];
   export type AttrSplat = [Opcodes.AttrSplat, YieldTo];
   export type Yield = [Opcodes.Yield, YieldTo, Option<Params>];
   export type Partial = [Opcodes.Partial, Expression, Core.EvalInfo];
   export type DynamicArg = [Opcodes.DynamicArg, str, Expression];
   export type StaticArg = [Opcodes.StaticArg, str, Expression];
   export type TrustingAttr = [Opcodes.TrustingAttr, str, Expression, str];
+  export type TrustingComponentAttr = [Opcodes.TrustingComponentAttr, str, Expression, str];
   export type Debugger = [Opcodes.Debugger, Core.EvalInfo];
   export type ClientSide =
     | [Opcodes.ClientSideStatement, any]
@@ -129,16 +131,23 @@ export namespace Statements {
     | CloseElement
     | StaticAttr
     | DynamicAttr
+    | ComponentAttr
     | AttrSplat
     | Yield
     | Partial
     | StaticArg
     | DynamicArg
     | TrustingAttr
+    | TrustingComponentAttr
     | Debugger
     | ClientSide;
 
-  export type Attribute = Statements.StaticAttr | Statements.DynamicAttr | Statements.AttrSplat;
+  export type Attribute =
+    | Statements.StaticAttr
+    | Statements.DynamicAttr
+    | Statements.ComponentAttr
+    | Statements.TrustingComponentAttr
+    | Statements.AttrSplat;
 
   export type Argument = Statements.StaticArg | Statements.DynamicArg;
 
@@ -216,7 +225,8 @@ export function isAttribute(val: Statement): val is Statements.Attribute {
   return (
     val[0] === Opcodes.StaticAttr ||
     val[0] === Opcodes.DynamicAttr ||
-    val[0] === Opcodes.TrustingAttr
+    val[0] === Opcodes.TrustingAttr ||
+    val[0] === Opcodes.ComponentAttr
   );
 }
 

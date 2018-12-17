@@ -36,7 +36,7 @@ export class StaticTaglessComponentManager extends BasicComponentManager {
       let layout = template.create(options).asLayout();
 
       return {
-        handle: layout.compile(),
+        handle: layout.compile(false),
         symbolTable: layout.symbolTable,
       };
     });

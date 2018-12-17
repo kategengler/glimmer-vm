@@ -62,7 +62,7 @@ import { ResolvedLayout } from './template';
 
 export interface CompilableProgram {
   symbolTable: ProgramSymbolTable;
-  compile(): number;
+  compile(isComponentAttrs: boolean): number;
 }
 
 export interface CompileTimeLookup<Locator> {

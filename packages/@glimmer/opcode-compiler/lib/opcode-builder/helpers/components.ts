@@ -145,10 +145,10 @@ export function invokeStaticComponent<Locator>(
         }
 
         if (callerBlock) {
-          pushYieldableBlock(encoder, callerBlock);
+          pushYieldableBlock(encoder, callerBlock, symbol === ATTRS_BLOCK);
           bindings.push({ symbol: i + 1, isBlock: true });
         } else {
-          pushYieldableBlock(encoder, null);
+          pushYieldableBlock(encoder, null, symbol === ATTRS_BLOCK);
           bindings.push({ symbol: i + 1, isBlock: true });
         }
 
@@ -189,7 +189,7 @@ export function invokeStaticComponent<Locator>(
     }
   }
 
-  invokeStatic(encoder, layout, compiler.isEager);
+  invokeStatic(encoder, layout, compiler.isEager, false);
 
   if (capabilities.createInstance) {
     encoder.push(Op.DidRenderLayout, $s0);
@@ -261,17 +261,17 @@ export function wrappedComponent<Locator>(
     reserveTarget(encoder, Op.JumpUnless, 'BODY');
 
     encoder.push(Op.Fetch, $s1);
-    encoder.isComponentAttrs = true;
+    // encoder.isComponentAttrs = true;
     encoder.push(Op.PutComponentOperations);
     encoder.push(Op.OpenDynamicElement);
     encoder.push(Op.DidCreateElement, $s0);
     yieldBlock(attrsBlockNumber, EMPTY_ARRAY, encoder, resolver, compiler, meta);
-    encoder.isComponentAttrs = false;
+    // encoder.isComponentAttrs = false;
     encoder.push(Op.FlushElement);
 
     label(encoder, 'BODY');
 
-    invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler));
+    invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler), false);
 
     encoder.push(Op.Fetch, $s1);
     reserveTarget(encoder, Op.JumpUnless, 'END');
@@ -356,7 +356,7 @@ export function invokeComponent<Locator>(
   invokePreparedComponent(encoder, blocks.has('default'), bindableBlocks, bindableAtNames, () => {
     if (layout) {
       pushSymbolTable(encoder, layout.symbolTable);
-      pushCompilable(encoder, layout, compiler.isEager);
+      pushCompilable(encoder, layout, compiler.isEager, false);
       if (!compiler.isEager) encoder.push(Op.CompileBlock);
     } else {
       encoder.push(Op.GetComponentLayout, $s0);

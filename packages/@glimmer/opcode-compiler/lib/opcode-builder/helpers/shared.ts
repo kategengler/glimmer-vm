@@ -8,7 +8,7 @@ import {
   LayoutWithContext,
 } from '@glimmer/interfaces';
 import { pushYieldableBlock } from './blocks';
-import { expressionCompiler, ExprCompilerState } from '../../syntax';
+import { ExprCompilerState, compileExpression } from '../../syntax';
 import { Op } from '@glimmer/vm';
 import { EMPTY_ARRAY } from '@glimmer/util';
 import { primitive } from './vm';
@@ -24,9 +24,9 @@ export function compileArgs<Locator>(
   let { encoder } = state;
 
   if (blocks.hasAny) {
-    pushYieldableBlock(encoder, blocks.get('default'));
-    pushYieldableBlock(encoder, blocks.get('else'));
-    pushYieldableBlock(encoder, blocks.get('attrs'));
+    pushYieldableBlock(encoder, blocks.get('default'), false);
+    pushYieldableBlock(encoder, blocks.get('else'), false);
+    pushYieldableBlock(encoder, blocks.get('attrs'), true);
   }
 
   let count = compileParams(state, params);
@@ -83,7 +83,7 @@ export function expr<Locator>(
   state: ExprCompilerState<Locator>
 ) {
   if (Array.isArray(expression)) {
-    expressionCompiler().compile(expression, state);
+    compileExpression(expression, state);
   } else {
     primitive(state.encoder, expression);
     state.encoder.push(Op.PrimitiveReference);
@@ -99,7 +99,7 @@ export function blockForLayout<Locator>(
     parameters: EMPTY_ARRAY,
   };
 
-  return new CompilableBlockImpl(compiler, block, meta(layout));
+  return new CompilableBlockImpl(compiler, block, meta(layout), false);
 }
 
 export function meta<Locator>(layout: LayoutWithContext<Locator>): ContainingMetadata<Locator> {

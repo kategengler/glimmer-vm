@@ -131,7 +131,7 @@ export class EmberishCurlyComponentManager
       let template = factory.create(options);
       let builder = template.asWrappedLayout();
       return {
-        handle: builder.compile(),
+        handle: builder.compile(false),
         symbolTable: builder.symbolTable,
       };
     });

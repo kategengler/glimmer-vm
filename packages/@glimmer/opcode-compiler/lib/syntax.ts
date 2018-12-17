@@ -59,13 +59,12 @@ export type StatementCompilerFunction<T extends TupleSyntax, Locator> = ((
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>
+  meta: ContainingMetadata<Locator>,
+  isComponentAttrs: boolean
 ) => void);
-export type NewCompilerFunction<T extends TupleSyntax, Locator> = ((
+export type SimpleCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  meta: ContainingMetadata<Locator>
+  state: ExprCompilerState<Locator>
 ) => void);
 export type LeafCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
@@ -74,7 +73,7 @@ export type LeafCompilerFunction<T extends TupleSyntax, Locator> = ((
 ) => void);
 export type RegisteredSyntax<T extends TupleSyntax, Locator> =
   | { type: 'leaf'; f: LeafCompilerFunction<T, Locator> }
-  | { type: 'mini'; f: NewCompilerFunction<T, Locator> }
+  | { type: 'mini'; f: SimpleCompilerFunction<T, Locator> }
   | { type: 'statement'; f: StatementCompilerFunction<T, Locator> };
 
 export const ATTRS_BLOCK = '&attrs';
@@ -93,11 +92,11 @@ export class ExpressionCompilers<Locator = unknown> {
 
   addSimple<T extends WireFormat.TupleExpression>(
     name: number,
-    func: NewCompilerFunction<T, Locator>
+    func: SimpleCompilerFunction<T, Locator>
   ): void {
     this.funcs.push({
       type: 'mini',
-      f: func as NewCompilerFunction<WireFormat.TupleExpression, Locator>,
+      f: func as SimpleCompilerFunction<WireFormat.TupleExpression, Locator>,
     });
     this.names[name] = this.funcs.length - 1;
   }
@@ -125,7 +124,7 @@ export class ExpressionCompilers<Locator = unknown> {
     );
 
     if (func.type === 'mini') {
-      func.f(sexp, state.encoder, state.resolver, state.meta);
+      func.f(sexp, state);
     } else if (func.type === 'statement') {
       throw new Error(`Can't compile an expression as a statement`);
     } else {
@@ -145,8 +144,8 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     this.names[name] = this.funcs.length - 1;
   }
 
-  addSimple<T extends Syntax>(name: number, func: NewCompilerFunction<T, Locator>): void {
-    this.funcs.push({ type: 'mini', f: func as NewCompilerFunction<Syntax, Locator> });
+  addSimple<T extends Syntax>(name: number, func: SimpleCompilerFunction<T, Locator>): void {
+    this.funcs.push({ type: 'mini', f: func as SimpleCompilerFunction<Syntax, Locator> });
     this.names[name] = this.funcs.length - 1;
   }
 
@@ -160,7 +159,8 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     encoder: OpcodeBuilderEncoder,
     resolver: CompileTimeLookup<Locator>,
     compiler: OpcodeBuilderCompiler<Locator>,
-    meta: ContainingMetadata<Locator>
+    meta: ContainingMetadata<Locator>,
+    isComponentAttrs: boolean
   ): void {
     let name: number = sexp![this.offset];
     let index = this.names[name];
@@ -173,15 +173,15 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     );
 
     if (func.type === 'mini') {
-      func.f(sexp as Syntax, encoder, resolver, meta);
+      func.f(sexp as Syntax, { encoder, resolver, meta });
     } else if (func.type === 'statement') {
-      func.f(sexp as Syntax, encoder, resolver, compiler, meta);
+      func.f(sexp as Syntax, encoder, resolver, compiler, meta, isComponentAttrs);
     } else {
       func.f(sexp as Syntax, encoder, meta);
     }
   }
 
-  compile(sexp: Syntax, builder: OpcodeBuilder<Locator>): void {
+  compileStatement(sexp: Syntax, builder: OpcodeBuilder<Locator>, isComponentAttrs: boolean): void {
     let name: number = sexp[this.offset];
     let index = this.names[name];
     let func = this.funcs[index];
@@ -193,9 +193,41 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     if (func.type === 'leaf') {
       func.f(sexp, builder.encoder, builder.meta);
     } else if (func.type === 'statement') {
-      func.f(sexp, builder.encoder, builder.resolver, builder.compiler, builder.meta);
+      func.f(
+        sexp,
+        builder.encoder,
+        builder.resolver,
+        builder.compiler,
+        builder.meta,
+        isComponentAttrs
+      );
     } else {
-      func.f(sexp, builder.encoder, builder.resolver, builder.meta);
+      func.f(sexp, builder);
+    }
+  }
+
+  compile(sexp: Syntax, builder: OpcodeBuilder<Locator>, isComponentAttrs: boolean): void {
+    let name: number = sexp[this.offset];
+    let index = this.names[name];
+    let func = this.funcs[index];
+    assert(
+      !!func,
+      `expected an implementation for ${this.offset === 0 ? Ops[sexp[0]] : ClientSide.Ops[sexp[1]]}`
+    );
+
+    if (func.type === 'leaf') {
+      func.f(sexp, builder.encoder, builder.meta);
+    } else if (func.type === 'statement') {
+      func.f(
+        sexp,
+        builder.encoder,
+        builder.resolver,
+        builder.compiler,
+        builder.meta,
+        isComponentAttrs
+      );
+    } else {
+      func.f(sexp, builder);
     }
   }
 }
@@ -225,14 +257,14 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     encoder.push(Op.FlushElement);
   });
 
-  STATEMENTS.addSimple(Ops.Modifier, (sexp: S.Modifier, encoder, resolver, meta) => {
-    let { referrer } = meta;
+  STATEMENTS.addSimple(Ops.Modifier, (sexp: S.Modifier, state) => {
+    let { resolver, meta } = state;
     let [, name, params, hash] = sexp;
 
-    let handle = resolver.lookupModifier(name, referrer);
+    let handle = resolver.lookupModifier(name, meta.referrer);
 
     if (handle !== null) {
-      modifier({ encoder, resolver, meta }, { handle, params, hash });
+      modifier(state, { handle, params, hash });
     } else {
       throw new Error(
         `Compile Error ${name} is not a modifier: Helpers may not be used in the element form.`
@@ -245,20 +277,40 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     staticAttr(encoder, name, namespace, value as string);
   });
 
-  STATEMENTS.addSimple(Ops.DynamicAttr, (sexp: S.DynamicAttr, encoder, resolver, meta) => {
-    dynamicAttr({ encoder, resolver, meta }, sexp, false);
-  });
+  STATEMENTS.addStatement(
+    Ops.DynamicAttr,
+    (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
+      dynamicAttr({ encoder, resolver, meta }, sexp, false, false);
+    }
+  );
 
-  STATEMENTS.addSimple(Ops.TrustingAttr, (sexp: S.DynamicAttr, encoder, resolver, meta) => {
-    dynamicAttr({ encoder, resolver, meta }, sexp, true);
-  });
+  STATEMENTS.addStatement(
+    Ops.ComponentAttr,
+    (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
+      dynamicAttr({ encoder, resolver, meta }, sexp, false, true);
+    }
+  );
+
+  STATEMENTS.addStatement(
+    Ops.TrustingAttr,
+    (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
+      dynamicAttr({ encoder, resolver, meta }, sexp, true, false);
+    }
+  );
+
+  STATEMENTS.addStatement(
+    Ops.TrustingComponentAttr,
+    (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
+      dynamicAttr({ encoder, resolver, meta }, sexp, true, true);
+    }
+  );
 
   STATEMENTS.addLeaf(Ops.OpenElement, (sexp: S.OpenElement, encoder) => {
     encoder.push(Op.OpenElement, str(sexp[1]));
   });
 
   STATEMENTS.addLeaf(Ops.OpenSplattedElement, (sexp: S.SplatElement, encoder) => {
-    encoder.isComponentAttrs = true;
+    // encoder.isComponentAttrs = true;
     encoder.push(Op.PutComponentOperations);
     encoder.push(Op.OpenElement, str(sexp[1]));
   });
@@ -279,7 +331,8 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
         attrsBlock = inlineBlock(
           { statements: wrappedAttrs, parameters: EMPTY_ARRAY },
           compiler,
-          meta
+          meta,
+          true
         );
       }
 
@@ -310,7 +363,12 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
         ..._attrs,
         [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, false],
       ];
-      let attrsBlock = inlineBlock({ statements: attrs, parameters: EMPTY_ARRAY }, compiler, meta);
+      let attrsBlock = inlineBlock(
+        { statements: attrs, parameters: EMPTY_ARRAY },
+        compiler,
+        meta,
+        true
+      );
 
       if (compilable) {
         encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
@@ -339,12 +397,14 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   });
 
-  STATEMENTS.addSimple(Ops.Partial, (sexp: S.Partial, encoder, resolver, meta) => {
+  STATEMENTS.addSimple(Ops.Partial, (sexp: S.Partial, state) => {
     let [, name, evalInfo] = sexp;
+
+    let { encoder, meta } = state;
 
     replayableIf(encoder, {
       args() {
-        expr(name, { encoder, resolver, meta });
+        expr(name, state);
         encoder.push(Op.Dup, $sp, 0);
         return 2;
       },
@@ -378,7 +438,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
       let [, to] = sexp;
 
       yieldBlock(to, EMPTY_ARRAY, encoder, resolver, compiler, meta);
-      encoder.isComponentAttrs = false;
+      // encoder.isComponentAttrs = false;
     }
   );
 
@@ -390,13 +450,21 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
   STATEMENTS.addStatement(
     Ops.ClientSideStatement,
-    (sexp: WireFormat.Statements.ClientSide, encoder, resolver, compiler, meta) => {
+    (
+      sexp: WireFormat.Statements.ClientSide,
+      encoder,
+      resolver,
+      compiler,
+      meta,
+      isComponentAttrs
+    ) => {
       CLIENT_SIDE.compileSimple(
         sexp as ClientSide.ClientSideStatement,
         encoder,
         resolver,
         compiler,
-        meta
+        meta,
+        isComponentAttrs
       );
     }
   );
@@ -428,7 +496,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
   const CLIENT_SIDE = new Compilers<ClientSide.ClientSideStatement, unknown>(1);
 
-  CLIENT_SIDE.addSimple(
+  CLIENT_SIDE.addLeaf(
     ClientSide.Ops.OpenComponentElement,
     (sexp: ClientSide.OpenComponentElement, encoder) => {
       encoder.push(Op.PutComponentOperations);
@@ -436,23 +504,23 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   );
 
-  CLIENT_SIDE.addSimple(ClientSide.Ops.DidCreateElement, (_sexp, encoder) => {
+  CLIENT_SIDE.addLeaf(ClientSide.Ops.DidCreateElement, (_sexp, encoder) => {
     encoder.push(Op.DidCreateElement, $s0);
   });
 
-  CLIENT_SIDE.addSimple(
+  CLIENT_SIDE.addLeaf(
     ClientSide.Ops.SetComponentAttrs,
     (sexp: ClientSide.SetComponentAttrs, encoder) => {
       encoder.isComponentAttrs = sexp[2];
     }
   );
 
-  CLIENT_SIDE.addSimple(ClientSide.Ops.Debugger, () => {
+  CLIENT_SIDE.addLeaf(ClientSide.Ops.Debugger, () => {
     // tslint:disable-next-line:no-debugger
     debugger;
   });
 
-  CLIENT_SIDE.addSimple(ClientSide.Ops.DidRenderLayout, (_sexp, encoder) => {
+  CLIENT_SIDE.addLeaf(ClientSide.Ops.DidRenderLayout, (_sexp, encoder) => {
     encoder.push(Op.DidRenderLayout, $s0);
   });
 
@@ -462,16 +530,17 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 function dynamicAttr<Locator>(
   state: ExprCompilerState<Locator>,
   sexp: S.DynamicAttr | S.TrustingAttr,
-  trusting: boolean
+  trusting: boolean,
+  isComponentAttrs: boolean
 ) {
   let [, name, value, namespace] = sexp;
 
   expr(value, state);
 
   if (namespace) {
-    finishDynamicAttr(state.encoder, name, namespace, trusting);
+    finishDynamicAttr(state.encoder, name, namespace, trusting, isComponentAttrs);
   } else {
-    finishDynamicAttr(state.encoder, name, null, trusting);
+    finishDynamicAttr(state.encoder, name, null, trusting, isComponentAttrs);
   }
 }
 
@@ -479,16 +548,24 @@ export function finishDynamicAttr(
   encoder: OpcodeBuilderEncoder,
   _name: string,
   _namespace: Option<string>,
-  trusting: boolean
+  trusting: boolean,
+  isComponentAttrs: boolean
 ) {
   let name = str(_name);
   let namespace = _namespace ? str(_namespace) : 0;
 
-  if (encoder.isComponentAttrs) {
+  if (isComponentAttrs) {
     encoder.push(Op.ComponentAttr, name, trusting === true ? 1 : 0, namespace);
   } else {
     encoder.push(Op.DynamicAttr, name, trusting === true ? 1 : 0, namespace);
   }
+}
+
+export function compileExpression<Locator>(
+  expression: WireFormat.TupleExpression,
+  state: ExprCompilerState<Locator>
+): void {
+  expressionCompiler().compile(expression, state);
 }
 
 let _expressionCompiler: ExpressionCompilers<unknown>;
@@ -500,13 +577,15 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
 
   const EXPRESSIONS = (_expressionCompiler = new ExpressionCompilers());
 
-  EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, encoder, resolver, meta) => {
+  EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, state) => {
     let name = sexp[1];
+
+    let { encoder, resolver, meta } = state;
 
     let handle = resolver.lookupHelper(name, meta.referrer);
 
     if (handle !== null) {
-      helper({ encoder, resolver, meta }, { handle, params: null, hash: null });
+      helper(state, { handle, params: null, hash: null });
     } else if (meta.asPartial) {
       encoder.push(Op.ResolveMaybeLocal, str(name));
     } else {
@@ -515,38 +594,38 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     }
   });
 
-  EXPRESSIONS.addSimple(Ops.Concat, (sexp: E.Concat, encoder, resolver, meta) => {
+  EXPRESSIONS.addSimple(Ops.Concat, (sexp: E.Concat, state) => {
     let parts = sexp[1];
     for (let i = 0; i < parts.length; i++) {
-      expr(parts[i], { encoder, resolver, meta });
+      expr(parts[i], state);
     }
-    encoder.push(Op.Concat, parts.length);
+
+    state.encoder.push(Op.Concat, parts.length);
   });
 
-  EXPRESSIONS.addSimple(Ops.Helper, (sexp: E.Helper, encoder, resolver, meta) => {
+  EXPRESSIONS.addSimple(Ops.Helper, (sexp: E.Helper, state) => {
     let [, name, params, hash] = sexp;
+
+    let { resolver, meta } = state;
 
     // TODO: triage this in the WF compiler
     if (name === 'component') {
       assert(params.length, 'SYNTAX ERROR: component helper requires at least one argument');
 
       let [definition, ...restArgs] = params;
-      curryComponent(
-        { encoder, resolver, meta },
-        {
-          definition,
-          params: restArgs,
-          hash,
-          synthetic: true,
-        }
-      );
+      curryComponent(state, {
+        definition,
+        params: restArgs,
+        hash,
+        synthetic: true,
+      });
       return;
     }
 
     let handle = resolver.lookupHelper(name, meta.referrer);
 
     if (handle !== null) {
-      helper({ encoder, resolver, meta }, { handle, params, hash });
+      helper(state, { handle, params, hash });
     } else {
       throw new Error(`Compile Error: ${name} is not a helper`);
     }
@@ -762,12 +841,12 @@ export function populateBuiltins<Locator>(
       },
 
       ifTrue() {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false);
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!, false);
         }
       },
     });
@@ -799,12 +878,12 @@ export function populateBuiltins<Locator>(
 
       ifTrue() {
         if (blocks.has('else')) {
-          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!, false);
         }
       },
 
       ifFalse() {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false);
       },
     });
   });
@@ -835,12 +914,12 @@ export function populateBuiltins<Locator>(
       },
 
       ifTrue() {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 1);
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false, 1);
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!, false);
         }
       },
     });
@@ -897,7 +976,7 @@ export function populateBuiltins<Locator>(
             reserveTarget(encoder, Op.Iterate, 'BREAK');
 
             label(encoder, 'BODY');
-            invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 2);
+            invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false, 2);
             encoder.push(Op.Pop, 2);
             reserveMachineTarget(encoder, MachineOp.Jump, 'FINALLY');
 
@@ -909,7 +988,7 @@ export function populateBuiltins<Locator>(
         label(encoder, 'ELSE');
 
         if (blocks.has('else')) {
-          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!, false);
         }
       },
     });
@@ -942,7 +1021,7 @@ export function populateBuiltins<Locator>(
 
       ifTrue() {
         remoteElement(encoder, () =>
-          invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')))
+          invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false)
         );
       },
     });
@@ -955,10 +1034,10 @@ export function populateBuiltins<Locator>(
       params(expressions, { encoder, resolver, meta });
 
       dynamicScope(encoder, names, () => {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false);
       });
     } else {
-      invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
+      invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false);
     }
   });
 

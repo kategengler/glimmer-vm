@@ -143,7 +143,7 @@ export default class LazyTestEnvironment extends TestEnvironment<TestMeta> {
     dynamicScope: DynamicScope = new TestDynamicScope()
   ): TemplateIterator {
     let layout = template.asLayout();
-    let handle = layout.compile();
+    let handle = layout.compile(false);
     // TODO, figure out runtime program stuff
     return renderMain(this.program, this, self, dynamicScope, builder, handle);
   }

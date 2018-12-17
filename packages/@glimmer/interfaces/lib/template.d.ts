@@ -164,5 +164,5 @@ export interface Compiler<
 
 export interface CompilableTemplate<S = SymbolTable> {
   symbolTable: S;
-  compile(): number;
+  compile(isComponentAttrs: boolean): number;
 }

@@ -356,9 +356,19 @@ export default class JavaScriptCompiler
     this.push([Ops.DynamicAttr, name, value, namespace]);
   }
 
+  componentAttr([name, namespace]: [string, Option<string>]) {
+    let value = this.popValue<Expression>();
+    this.push([Ops.ComponentAttr, name, value, namespace]);
+  }
+
   trustingAttr([name, namespace]: [string, Option<string>]) {
     let value = this.popValue<Expression>();
     this.push([Ops.TrustingAttr, name, value, namespace!]);
+  }
+
+  trustingComponentAttr([name, namespace]: [string, Option<string>]) {
+    let value = this.popValue<Expression>();
+    this.push([Ops.TrustingComponentAttr, name, value, namespace!]);
   }
 
   staticArg(name: str) {

@@ -211,7 +211,7 @@ export default class BundleCompiler<Locator> {
 
     // Compile the template, which writes opcodes to the heap and returns the VM
     // handle (the address of the compiled program in the heap).
-    vmHandle = compilableTemplate.compile();
+    vmHandle = compilableTemplate.compile(false);
 
     // Index the locator by VM handle and vice versa for easy lookups.
     this.resolver.setHandleByLocator(locator, vmHandle);

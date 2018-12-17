@@ -68,8 +68,9 @@ export class AppendOpcodes {
         opcode.op2,
         opcode.op3
       );
+
       // console.log(`${typePos(vm['pc'])}.`);
-      console.log(`${pos}. ${logOpcode(name, params)}`);
+      console.log(`${pos}. ${logOpcode(opName, params)}`);
 
       let debugParams = [];
       for (let prop in params) {
@@ -149,8 +150,10 @@ export class AppendOpcodes {
       console.log(
         '%c -> elements',
         'color: blue',
-        vm.elements()['cursorStack']['stack'].map((c: any) => c.element)
+        vm.elements()['cursorStack']['stack'][0].element
       );
+
+      console.log('%c -> constructing', 'color: aqua', vm.elements()['constructing']);
       /* tslint:enable */
     }
   }

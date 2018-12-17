@@ -60,7 +60,7 @@ export class BasicComponentManager
         let template = createTemplate<TestMeta>(source);
         let layout = template.create(resolver.compiler).asLayout();
         return {
-          handle: layout.compile(),
+          handle: layout.compile(false),
           symbolTable: layout.symbolTable,
         };
       };
