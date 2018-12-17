@@ -4,12 +4,14 @@ import {
   Encoder,
   Labels,
   STDLib,
-  BuilderOperand,
   BuilderOperands,
   LabelOperand,
+  MachineBuilderOperand,
+  BuilderHandleThunk,
+  Operand,
 } from '@glimmer/interfaces';
-import { Operands, OpcodeBuilderCompiler } from './interfaces';
-import { MachineOp, Op } from '@glimmer/vm';
+import { OpcodeBuilderCompiler } from './interfaces';
+import { MachineOp, Op, isMachineOp } from '@glimmer/vm';
 import { LazyConstants } from '@glimmer/program';
 import { Stack, dict, expect } from '@glimmer/util';
 
@@ -56,7 +58,7 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
   }
 
   commit(compiler: OpcodeBuilderCompiler<unknown>, size: number): number {
-    this.pushMachine(MachineOp.Return);
+    this.push(MachineOp.Return);
     return compiler.commit(size, this.encoder.buffer);
   }
 
@@ -72,49 +74,25 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
     this.encoder.encode(name, OpcodeSize.MACHINE_MASK, -1);
   }
 
-  push(name: Op, ...args: BuilderOperands): void {
-    switch (arguments.length) {
-      case 1:
-        return this.encoder.encode(name, 0);
-      case 2:
-        return this.encoder.encode(name, 0, this.operand(args[0], 0));
-      case 3:
-        return this.encoder.encode(name, 0, this.operand(args[0], 0), this.operand(args[1], 1));
-      default:
-        return this.encoder.encode(
-          name,
-          0,
-          this.operand(args[0], 0),
-          this.operand(args[1], 1),
-          this.operand(args[2], 2)
-        );
-    }
-  }
-
-  pushMachine(name: MachineOp, ...args: Operands): void;
-  pushMachine(name: MachineOp) {
-    switch (arguments.length) {
-      case 1:
-        return this.encoder.encode(name, OpcodeSize.MACHINE_MASK);
-      case 2:
-        return this.encoder.encode(name, OpcodeSize.MACHINE_MASK, arguments[1]);
-      case 3:
-        return this.encoder.encode(name, OpcodeSize.MACHINE_MASK, arguments[1], arguments[2]);
-      default:
-        return this.encoder.encode(
-          name,
-          OpcodeSize.MACHINE_MASK,
-          arguments[1],
-          arguments[2],
-          arguments[3]
-        );
+  push(name: Op | MachineOp, ...args: BuilderOperands): void {
+    if (isMachineOp(name)) {
+      let operands = args.map((operand, i) => this.operand(operand, i));
+      return this.encoder.encode(name, OpcodeSize.MACHINE_MASK, ...operands);
+    } else {
+      let operands = args.map((operand, i) => this.operand(operand, i));
+      return this.encoder.encode(name, 0, ...operands);
     }
   }
 
   operand(operand: LabelOperand, index: number): number;
-  operand(operand: BuilderOperand, index?: number): number;
-  operand(operand: BuilderOperand, index?: number): number {
+  operand(operand: BuilderHandleThunk, index?: number): BuilderHandleThunk;
+  operand(operand: MachineBuilderOperand, index?: number): number;
+  operand(operand: MachineBuilderOperand, index?: number): Operand {
     if (typeof operand === 'number') {
+      return operand;
+    }
+
+    if (typeof operand === 'function') {
       return operand;
     }
 
@@ -148,8 +126,8 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
     return expect(this.labelsStack.current, 'bug: not in a label stack');
   }
 
-  label(name: string, index: number) {
-    this.currentLabels.label(name, index);
+  label(name: string) {
+    this.currentLabels.label(name, this.nextPos);
   }
 
   target(at: number, target: string) {

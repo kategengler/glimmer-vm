@@ -1,6 +1,6 @@
 import { OpcodeBuilderEncoder, When, label } from '../interfaces';
 import { Op, MachineOp } from '@glimmer/vm';
-import { labels, markLabel, reserveMachineTarget } from './labels';
+import { labels } from './labels';
 
 export function switchCases(encoder: OpcodeBuilderEncoder, callback: (when: When) => void) {
   // Setup the switch DSL
@@ -34,7 +34,7 @@ export function switchCases(encoder: OpcodeBuilderEncoder, callback: (when: When
     for (let i = clauses.length - 1; i >= 0; i--) {
       let clause = clauses[i];
 
-      markLabel(encoder, clause.label);
+      encoder.label(clause.label);
       encoder.push(Op.Pop, 2);
 
       clause.callback();
@@ -42,11 +42,11 @@ export function switchCases(encoder: OpcodeBuilderEncoder, callback: (when: When
       // The first match is special: it is placed directly before the END
       // label, so no additional jump is needed at the end of it.
       if (i !== 0) {
-        reserveMachineTarget(encoder, MachineOp.Jump, 'END');
+        encoder.push(MachineOp.Jump, label('END'));
       }
     }
 
-    markLabel(encoder, 'END');
+    encoder.label('END');
   });
 
   encoder.push(Op.Exit);
@@ -120,11 +120,11 @@ export function replayable(
   // Start a new label frame, to give END and RETURN
   // a unique meaning.
   labels(encoder, () => {
-    encoder.pushMachine(MachineOp.PushFrame);
+    encoder.push(MachineOp.PushFrame);
 
     // If the body invokes a block, its return will return to
     // END. Otherwise, the return in RETURN will return to END.
-    reserveMachineTarget(encoder, MachineOp.ReturnTo, 'ENDINITIAL');
+    encoder.push(MachineOp.ReturnTo, label('ENDINITIAL'));
 
     // Push the arguments onto the stack. The args() function
     // tells us how many stack elements to retain for re-execution
@@ -151,7 +151,7 @@ export function replayable(
     // All execution paths in the body should run the FINALLY once
     // they are done. It is executed both during initial execution
     // and during updating execution.
-    markLabel(encoder, 'FINALLY');
+    encoder.label('FINALLY');
 
     // Finalize the DOM.
     encoder.push(Op.Exit);
@@ -159,12 +159,12 @@ export function replayable(
     // In initial execution, this is a noop: it returns to the
     // immediately following opcode. In updating execution, this
     // exits the updating routine.
-    encoder.pushMachine(MachineOp.Return);
+    encoder.push(MachineOp.Return);
 
     // Cleanup code for the block. Runs on initial execution
     // but not on updating.
-    markLabel(encoder, 'ENDINITIAL');
-    encoder.pushMachine(MachineOp.PopFrame);
+    encoder.label('ENDINITIAL');
+    encoder.push(MachineOp.PopFrame);
   });
 }
 
@@ -208,9 +208,9 @@ export function replayableIf(
       // We're done, so return. In the initial execution, this runs
       // the cleanup code. In the updating VM, it exits the updating
       // routine.
-      reserveMachineTarget(encoder, MachineOp.Jump, 'FINALLY');
+      encoder.push(MachineOp.Jump, label('FINALLY'));
 
-      markLabel(encoder, 'ELSE');
+      encoder.label('ELSE');
 
       // If the conditional is false, and code associatied ith the
       // false branch was provided, execute it. If there was no code

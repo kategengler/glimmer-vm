@@ -26,7 +26,7 @@ import * as WireFormat from '@glimmer/wire-format';
 
 import { Op, MachineOp } from '@glimmer/vm';
 import { Core } from '@glimmer/wire-format';
-import { Operand, InstructionEncoder } from '@glimmer/encoder';
+import { InstructionEncoder } from '@glimmer/encoder';
 
 export type Label = string;
 

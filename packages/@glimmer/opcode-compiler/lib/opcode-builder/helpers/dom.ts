@@ -23,10 +23,10 @@ export function modifier<Locator>(
 ) {
   let { encoder } = state;
 
-  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(MachineOp.PushFrame);
   compileArgs(params, hash, EMPTY_BLOCKS, true, state);
   encoder.push(Op.Modifier, { type: 'handle', value: handle });
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.PopFrame);
 }
 
 export function remoteElement(encoder: OpcodeBuilderEncoder, block: Block): void {

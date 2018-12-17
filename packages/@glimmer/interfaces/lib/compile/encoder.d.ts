@@ -38,33 +38,6 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
   ): number;
 
   /**
-   * Reserve space in the program for this opcode with one operand for the
-   * target. This space will eventually be replaced with a target offset for
-   * a jump, once labels have been resolved.
-   *
-   * @param opcode
-   */
-  reserve(opcode: Op): void;
-
-  /**
-   * Reserve space in the program for this opcode and a target, and one
-   * additional operand.
-   *
-   * @param opcode
-   * @param operand
-   */
-  reserveWithOperand(opcode: Op, operand: number): void;
-
-  /**
-   * Reserve space in the program for this machine opcode and a target.
-   * It works the same way as `reserve` but inserts a machine opcode
-   * instead of a syscall.
-   *
-   * @param opcode
-   */
-  reserveMachine(opcode: MachineOp): void;
-
-  /**
    * Push a syscall into the program with up to three optional
    * operands.
    *
@@ -72,16 +45,7 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
    * @param args up to three operands, formatted as
    *   { type: "type", value: value }
    */
-  push(opcode: Op, ...args: BuilderOperands): void;
-
-  /**
-   * Push a machine opcode into the program with up to threee
-   * optional operands.
-   *
-   * @param opcode
-   * @param args
-   */
-  pushMachine(opcode: MachineOp, ...args: Operands): void;
+  push(opcode: Op | MachineOp, ...args: BuilderOperands): void;
 
   /**
    * Start a new labels block. A labels block is a scope for labels that
@@ -117,7 +81,7 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
    * @param name
    * @param index
    */
-  label(name: string, index: number): void;
+  label(name: string): void;
 
   target(at: number, target: string): void;
   operand(operand: BuilderOperand): number;

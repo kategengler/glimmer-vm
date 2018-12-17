@@ -65,13 +65,24 @@ export type NonlabelBuilderOperand =
   | number;
 
 export type BuilderOperand = NonlabelBuilderOperand | LabelOperand;
+export type MachineBuilderOperand = BuilderOperand | BuilderHandleThunk;
 
-export type BuilderOperands =
+export type BuilderOperandsTuple =
   | []
   | [BuilderOperand]
   | [BuilderOperand, BuilderOperand]
   | [BuilderOperand, BuilderOperand, BuilderOperand];
 
-export type Operand = number | (() => number);
+export type MachineBuilderOperandsTuple =
+  | []
+  | [MachineBuilderOperand]
+  | [MachineBuilderOperand, MachineBuilderOperand]
+  | [MachineBuilderOperand, MachineBuilderOperand, MachineBuilderOperand];
+
+export type BuilderOperands = MachineBuilderOperandsTuple & MachineBuilderOperand[];
+
+export type BuilderHandleThunk = (() => number);
+
+export type Operand = number | BuilderHandleThunk;
 
 export type Operands = [] | [Operand] | [Operand, Operand] | [Operand, Operand, Operand];

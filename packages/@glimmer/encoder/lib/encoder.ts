@@ -1,5 +1,5 @@
 import { Op, MachineOp } from '@glimmer/vm';
-import { CompilerBuffer } from '@glimmer/interfaces';
+import { CompilerBuffer, Operand } from '@glimmer/interfaces';
 
 export const enum OpcodeSize {
   ARG_SHIFT = 8,
@@ -9,8 +9,6 @@ export const enum OpcodeSize {
   OPERAND_LEN_MASK = 0b0000001100000000,
   MACHINE_MASK = 0b0000010000000000,
 }
-
-export type Operand = number | (() => number);
 
 export class InstructionEncoder {
   constructor(public buffer: CompilerBuffer) {}

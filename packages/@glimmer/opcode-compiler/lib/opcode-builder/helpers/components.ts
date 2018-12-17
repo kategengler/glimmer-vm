@@ -29,7 +29,7 @@ import {
   invokeStatic,
 } from './blocks';
 import { ATTRS_BLOCK, ExprCompilerState } from '../../syntax';
-import { markLabel, labels } from './labels';
+import { labels } from './labels';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { debugCompiler } from '../../compiler';
 import { ComponentArgs } from '../../interfaces';
@@ -106,7 +106,7 @@ export function invokeStaticComponent<Locator>(
   let state = { encoder, resolver, meta };
 
   if (capabilities.createArgs) {
-    encoder.pushMachine(MachineOp.PushFrame);
+    encoder.push(MachineOp.PushFrame);
     compileArgs(null, hash, EMPTY_BLOCKS, synthetic, { encoder, resolver, meta });
   }
 
@@ -121,10 +121,10 @@ export function invokeStaticComponent<Locator>(
   }
 
   if (capabilities.createArgs) {
-    encoder.pushMachine(MachineOp.PopFrame);
+    encoder.push(MachineOp.PopFrame);
   }
 
-  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(MachineOp.PushFrame);
   encoder.push(Op.RegisterComponentDestructor, $s0);
 
   let bindings: { symbol: number; isBlock: boolean }[] = [];
@@ -196,7 +196,7 @@ export function invokeStaticComponent<Locator>(
     encoder.push(Op.DidRenderLayout, $s0);
   }
 
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.PopFrame);
   encoder.push(Op.PopScope);
 
   if (capabilities.dynamicScope) {
@@ -238,7 +238,7 @@ export function invokeDynamicComponent<Locator>(
         blocks,
       });
 
-      markLabel(encoder, 'ELSE');
+      encoder.label('ELSE');
     },
   });
 }
@@ -270,7 +270,7 @@ export function wrappedComponent<Locator>(
     // encoder.isComponentAttrs = false;
     encoder.push(Op.FlushElement);
 
-    markLabel(encoder, 'BODY');
+    encoder.label('BODY');
 
     invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler));
 
@@ -278,7 +278,7 @@ export function wrappedComponent<Locator>(
     encoder.push(Op.JumpUnless, label('END'));
     encoder.push(Op.CloseElement);
 
-    markLabel(encoder, 'END');
+    encoder.label('END');
     encoder.push(Op.Load, $s1);
   });
 
@@ -342,7 +342,7 @@ export function invokeComponent<Locator>(
   encoder.push(Op.Dup, $sp, 1);
   encoder.push(Op.Load, $s0);
 
-  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(MachineOp.PushFrame);
 
   let bindableBlocks = !!namedBlocks;
   let bindableAtNames =
@@ -399,7 +399,7 @@ export function invokePreparedComponent(
   encoder.push(Op.Pop, 1);
   encoder.push(Op.InvokeComponentLayout, $s0);
   encoder.push(Op.DidRenderLayout, $s0);
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.PopFrame);
 
   encoder.push(Op.PopScope);
   encoder.push(Op.PopDynamicScope);
@@ -411,7 +411,7 @@ export function invokeBareComponent(encoder: OpcodeBuilderEncoder) {
   encoder.push(Op.Dup, $sp, 1);
   encoder.push(Op.Load, $s0);
 
-  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(MachineOp.PushFrame);
   encoder.push(Op.PushEmptyArgs);
   encoder.push(Op.PrepareArgs, $s0);
 
@@ -430,11 +430,11 @@ export function curryComponent<Locator>(
   let { encoder, meta } = state;
   let referrer = meta.referrer;
 
-  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(MachineOp.PushFrame);
   compileArgs(params, hash, EMPTY_BLOCKS, synthetic, state);
   encoder.push(Op.CaptureArgs);
   expr(definition, state);
   encoder.push(Op.CurryComponent, { type: 'serializable', value: referrer });
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.PopFrame);
   encoder.push(Op.Fetch, $v0);
 }

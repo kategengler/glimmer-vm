@@ -30,14 +30,14 @@ export function invokeStatic(
     // function that will produce the correct handle when the heap is
     // serialized.
     if (handle === PLACEHOLDER_HANDLE) {
-      encoder.pushMachine(MachineOp.InvokeStatic, () => compilable.compile());
+      encoder.push(MachineOp.InvokeStatic, () => compilable.compile());
     } else {
-      encoder.pushMachine(MachineOp.InvokeStatic, handle);
+      encoder.push(MachineOp.InvokeStatic, handle);
     }
   } else {
     encoder.push(Op.Constant, { type: 'other', value: compilable });
     encoder.push(Op.CompileBlock);
-    encoder.pushMachine(MachineOp.InvokeVirtual);
+    encoder.push(MachineOp.InvokeVirtual);
   }
 }
 
@@ -54,7 +54,7 @@ export function yieldBlock<Locator>(
   if (!compiler.isEager) encoder.push(Op.CompileBlock);
   encoder.push(Op.InvokeYield);
   encoder.push(Op.PopScope);
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.PopFrame);
 }
 
 export function pushYieldableBlock(encoder: OpcodeBuilderEncoder, block: Option<CompilableBlock>) {
@@ -94,7 +94,7 @@ export function invokeStaticBlock<Locator>(
   let calleeCount = parameters.length;
   let count = Math.min(callerCount, calleeCount);
 
-  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(MachineOp.PushFrame);
 
   if (count) {
     encoder.push(Op.ChildScope);
@@ -107,13 +107,13 @@ export function invokeStaticBlock<Locator>(
 
   pushCompilable(encoder, block, compiler.isEager);
   if (!compiler.isEager) encoder.push(Op.CompileBlock);
-  encoder.pushMachine(MachineOp.InvokeVirtual);
+  encoder.push(MachineOp.InvokeVirtual);
 
   if (count) {
     encoder.push(Op.PopScope);
   }
 
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.PopFrame);
 }
 
 export function pushSymbolTable(encoder: OpcodeBuilderEncoder, table: Option<SymbolTable>): void {

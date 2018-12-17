@@ -88,9 +88,9 @@ function sizeImmediate(encoder: OpcodeBuilderEncoder, shifted: number, primitive
 }
 
 export function frame(encoder: OpcodeBuilderEncoder, block: Block): void {
-  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(MachineOp.PushFrame);
   block(encoder);
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.PopFrame);
 }
 
 export function withSavedRegister(
@@ -115,10 +115,10 @@ export function helper<Locator>(
 ) {
   let { encoder } = state;
 
-  encoder.pushMachine(MachineOp.PushFrame);
+  encoder.push(MachineOp.PushFrame);
   compileArgs(params, hash, EMPTY_BLOCKS, true, state);
   encoder.push(Op.Helper, { type: 'handle', value: handle });
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.PopFrame);
   encoder.push(Op.Fetch, $v0);
 }
 

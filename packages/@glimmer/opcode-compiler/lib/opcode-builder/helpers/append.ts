@@ -12,11 +12,8 @@ export function guardedAppend<Locator>(
 ): void {
   let { encoder } = state;
 
-  encoder.pushMachine(MachineOp.PushFrame);
-
+  encoder.push(MachineOp.PushFrame);
   expr(expression, state);
-
-  encoder.pushMachine(MachineOp.InvokeStatic, encoder.stdlib.getAppend(trusting));
-
-  encoder.pushMachine(MachineOp.PopFrame);
+  encoder.push(MachineOp.InvokeStatic, encoder.stdlib.getAppend(trusting));
+  encoder.push(MachineOp.PopFrame);
 }
