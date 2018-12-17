@@ -6,6 +6,7 @@ import {
   STDLib,
   BuilderOperand,
   BuilderOperands,
+  LabelOperand,
 } from '@glimmer/interfaces';
 import { Operands, OpcodeBuilderCompiler } from './interfaces';
 import { MachineOp, Op } from '@glimmer/vm';
@@ -76,16 +77,16 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
       case 1:
         return this.encoder.encode(name, 0);
       case 2:
-        return this.encoder.encode(name, 0, this.operand(args[0]));
+        return this.encoder.encode(name, 0, this.operand(args[0], 0));
       case 3:
-        return this.encoder.encode(name, 0, this.operand(args[0]), this.operand(args[1]));
+        return this.encoder.encode(name, 0, this.operand(args[0], 0), this.operand(args[1], 1));
       default:
         return this.encoder.encode(
           name,
           0,
-          this.operand(args[0]),
-          this.operand(args[1]),
-          this.operand(args[2])
+          this.operand(args[0], 0),
+          this.operand(args[1], 1),
+          this.operand(args[2], 2)
         );
     }
   }
@@ -110,7 +111,9 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
     }
   }
 
-  operand(operand: BuilderOperand): number {
+  operand(operand: LabelOperand, index: number): number;
+  operand(operand: BuilderOperand, index?: number): number;
+  operand(operand: BuilderOperand, index?: number): number {
     if (typeof operand === 'number') {
       return operand;
     }
@@ -129,6 +132,9 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
         return this.constants.array(operand.value);
       case 'string-array':
         return this.constants.stringArray(operand.value);
+      case 'label':
+        this.target(this.nextPos + index!, operand.value);
+        return -1;
       case 'serializable':
         return this.constants.serializable(operand.value);
       case 'other':
@@ -140,6 +146,14 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
 
   get currentLabels(): OpcodeBuilderLabels {
     return expect(this.labelsStack.current, 'bug: not in a label stack');
+  }
+
+  label(name: string, index: number) {
+    this.currentLabels.label(name, index);
+  }
+
+  target(at: number, target: string) {
+    this.currentLabels.target(at, target);
   }
 
   startLabels() {

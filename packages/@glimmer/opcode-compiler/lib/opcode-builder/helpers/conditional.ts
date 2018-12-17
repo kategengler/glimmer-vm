@@ -1,12 +1,6 @@
-import { OpcodeBuilderEncoder, When } from '../interfaces';
+import { OpcodeBuilderEncoder, When, label } from '../interfaces';
 import { Op, MachineOp } from '@glimmer/vm';
-import {
-  labels,
-  reserveTargetWithOperand,
-  label,
-  reserveMachineTarget,
-  reserveTarget,
-} from './labels';
+import { labels, markLabel, reserveMachineTarget } from './labels';
 
 export function switchCases(encoder: OpcodeBuilderEncoder, callback: (when: When) => void) {
   // Setup the switch DSL
@@ -33,14 +27,14 @@ export function switchCases(encoder: OpcodeBuilderEncoder, callback: (when: When
     // opcode, since it bleeds directly into its clause.
     clauses
       .slice(0, -1)
-      .forEach(clause => reserveTargetWithOperand(encoder, Op.JumpEq, clause.match, clause.label));
+      .forEach(clause => encoder.push(Op.JumpEq, label(clause.label), clause.match));
 
     // Enumerate the clauses in reverse order. Earlier matches will
     // require fewer checks.
     for (let i = clauses.length - 1; i >= 0; i--) {
       let clause = clauses[i];
 
-      label(encoder, clause.label);
+      markLabel(encoder, clause.label);
       encoder.push(Op.Pop, 2);
 
       clause.callback();
@@ -52,7 +46,7 @@ export function switchCases(encoder: OpcodeBuilderEncoder, callback: (when: When
       }
     }
 
-    label(encoder, 'END');
+    markLabel(encoder, 'END');
   });
 
   encoder.push(Op.Exit);
@@ -157,7 +151,7 @@ export function replayable(
     // All execution paths in the body should run the FINALLY once
     // they are done. It is executed both during initial execution
     // and during updating execution.
-    label(encoder, 'FINALLY');
+    markLabel(encoder, 'FINALLY');
 
     // Finalize the DOM.
     encoder.push(Op.Exit);
@@ -169,7 +163,7 @@ export function replayable(
 
     // Cleanup code for the block. Runs on initial execution
     // but not on updating.
-    label(encoder, 'ENDINITIAL');
+    markLabel(encoder, 'ENDINITIAL');
     encoder.pushMachine(MachineOp.PopFrame);
   });
 }
@@ -206,7 +200,7 @@ export function replayableIf(
 
     body: () => {
       // If the conditional is false, jump to the ELSE label.
-      reserveTarget(encoder, Op.JumpUnless, 'ELSE');
+      encoder.push(Op.JumpUnless, label('ELSE'));
 
       // Otherwise, execute the code associated with the true branch.
       ifTrue();
@@ -216,7 +210,7 @@ export function replayableIf(
       // routine.
       reserveMachineTarget(encoder, MachineOp.Jump, 'FINALLY');
 
-      label(encoder, 'ELSE');
+      markLabel(encoder, 'ELSE');
 
       // If the conditional is false, and code associatied ith the
       // false branch was provided, execute it. If there was no code

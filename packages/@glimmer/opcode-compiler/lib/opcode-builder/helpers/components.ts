@@ -14,6 +14,7 @@ import {
   DynamicComponent,
   Component,
   CurryComponent,
+  label,
 } from '../interfaces';
 import { resolveLayoutForTag, resolveLayoutForHandle } from '../../resolver';
 import { Op, $s0, $sp, MachineOp, $s1, $v0 } from '@glimmer/vm';
@@ -28,7 +29,7 @@ import {
   invokeStatic,
 } from './blocks';
 import { ATTRS_BLOCK, ExprCompilerState } from '../../syntax';
-import { reserveTarget, label, labels } from './labels';
+import { markLabel, labels } from './labels';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { debugCompiler } from '../../compiler';
 import { ComponentArgs } from '../../interfaces';
@@ -223,7 +224,7 @@ export function invokeDynamicComponent<Locator>(
     },
 
     body: () => {
-      reserveTarget(encoder, Op.JumpUnless, 'ELSE');
+      encoder.push(Op.JumpUnless, label('ELSE'));
 
       encoder.push(Op.ResolveDynamicComponent, { type: 'serializable', value: meta.referrer });
       encoder.push(Op.PushDynamicComponentInstance);
@@ -237,7 +238,7 @@ export function invokeDynamicComponent<Locator>(
         blocks,
       });
 
-      label(encoder, 'ELSE');
+      markLabel(encoder, 'ELSE');
     },
   });
 }
@@ -258,7 +259,7 @@ export function wrappedComponent<Locator>(
       encoder.push(Op.Dup, $sp, 0);
     });
 
-    reserveTarget(encoder, Op.JumpUnless, 'BODY');
+    encoder.push(Op.JumpUnless, label('BODY'));
 
     encoder.push(Op.Fetch, $s1);
     // encoder.isComponentAttrs = true;
@@ -269,15 +270,15 @@ export function wrappedComponent<Locator>(
     // encoder.isComponentAttrs = false;
     encoder.push(Op.FlushElement);
 
-    label(encoder, 'BODY');
+    markLabel(encoder, 'BODY');
 
     invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler));
 
     encoder.push(Op.Fetch, $s1);
-    reserveTarget(encoder, Op.JumpUnless, 'END');
+    encoder.push(Op.JumpUnless, label('END'));
     encoder.push(Op.CloseElement);
 
-    label(encoder, 'END');
+    markLabel(encoder, 'END');
     encoder.push(Op.Load, $s1);
   });
 

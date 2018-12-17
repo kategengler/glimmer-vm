@@ -49,6 +49,11 @@ export interface ConstantPool {
   numbers: number[];
 }
 
+/**
+ * Constants are interned values that are referenced as numbers in the program.
+ * The constant pool is a part of the program, and is always transmitted
+ * together with the program.
+ */
 export interface CompileTimeConstants<Locator = unknown> {
   string(value: string): number;
   stringArray(strings: string[]): number;
@@ -59,6 +64,10 @@ export interface CompileTimeConstants<Locator = unknown> {
   toPool(): ConstantPool;
 }
 
+/**
+ * In JIT mode, the constant pool is allowed to store arbitrary values,
+ * which don't need to be serialized or transmitted over the wire.
+ */
 export interface CompileTimeLazyConstants extends CompileTimeConstants {
   other(value: Opaque): number;
 }

@@ -19,6 +19,7 @@ import OpcodeBuilder, {
   arr,
   optionStr,
   bool,
+  label,
 } from './opcode-builder/interfaces';
 
 import Ops = WireFormat.Ops;
@@ -50,7 +51,7 @@ import {
   curryComponent,
   staticComponentHelper,
 } from './opcode-builder/helpers/components';
-import { reserveTarget, reserveMachineTarget, label } from './opcode-builder/helpers/labels';
+import { reserveMachineTarget, markLabel } from './opcode-builder/helpers/labels';
 import { guardedAppend } from './opcode-builder/helpers/append';
 import { replayableIf, replayable } from './opcode-builder/helpers/conditional';
 import { modifier, staticAttr, remoteElement } from './opcode-builder/helpers/dom';
@@ -926,27 +927,27 @@ export function populateBuiltins<Locator>(
       body() {
         encoder.push(Op.PutIterator);
 
-        reserveTarget(encoder, Op.JumpUnless, 'ELSE');
+        encoder.push(Op.JumpUnless, label('ELSE'));
 
         frame(encoder, () => {
           encoder.push(Op.Dup, $fp, 1);
 
           reserveMachineTarget(encoder, MachineOp.ReturnTo, 'ITER');
           list(encoder, 'BODY', () => {
-            label(encoder, 'ITER');
-            reserveTarget(encoder, Op.Iterate, 'BREAK');
+            markLabel(encoder, 'ITER');
+            encoder.push(Op.Iterate, label('BREAK'));
 
-            label(encoder, 'BODY');
+            markLabel(encoder, 'BODY');
             invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 2);
             encoder.push(Op.Pop, 2);
             reserveMachineTarget(encoder, MachineOp.Jump, 'FINALLY');
 
-            label(encoder, 'BREAK');
+            markLabel(encoder, 'BREAK');
           });
         });
 
         reserveMachineTarget(encoder, MachineOp.Jump, 'FINALLY');
-        label(encoder, 'ELSE');
+        markLabel(encoder, 'ELSE');
 
         if (blocks.has('else')) {
           invokeStaticBlock(encoder, compiler, blocks.get('else')!);

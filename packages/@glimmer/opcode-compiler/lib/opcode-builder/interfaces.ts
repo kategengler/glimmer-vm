@@ -20,6 +20,7 @@ import {
   SerializableOperand,
   OtherOperand,
   OptionStringOperand,
+  LabelOperand,
 } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 
@@ -142,6 +143,10 @@ export function serializable(value: unknown): SerializableOperand {
 
 export function other(value: unknown): OtherOperand {
   return { type: 'other', value };
+}
+
+export function label(value: string): LabelOperand {
+  return { type: 'label', value };
 }
 
 export type Operand = number | (() => number);

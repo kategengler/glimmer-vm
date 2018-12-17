@@ -8,11 +8,11 @@ import {
   CompileHelper,
   strArray,
   arr,
+  label,
 } from '../interfaces';
 import { PrimitiveType } from '@glimmer/program';
 import { Op, MachineOp, SavedRegister, $v0 } from '@glimmer/vm';
 import { Primitive } from '../../interfaces';
-import { reserveTarget } from './labels';
 import { Option, BuilderOperand } from '@glimmer/interfaces';
 import { compileArgs } from './shared';
 import { EMPTY_BLOCKS } from '../../utils';
@@ -104,7 +104,7 @@ export function withSavedRegister(
 }
 
 export function list(encoder: OpcodeBuilderEncoder, start: string, block: Block): void {
-  reserveTarget(encoder, Op.EnterList, start);
+  encoder.push(Op.EnterList, label(start));
   block(encoder);
   encoder.push(Op.ExitList);
 }

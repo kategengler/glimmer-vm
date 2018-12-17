@@ -36,6 +36,11 @@ export interface HandleOperand {
   value: number;
 }
 
+export interface LabelOperand {
+  type: 'label';
+  value: string;
+}
+
 export interface SerializableOperand {
   type: 'serializable';
   value: unknown;
@@ -46,7 +51,7 @@ export interface OtherOperand {
   value: unknown;
 }
 
-export type BuilderOperand =
+export type NonlabelBuilderOperand =
   | OptionStringOperand
   | StringOperand
   | BooleanOperand
@@ -54,9 +59,12 @@ export type BuilderOperand =
   | ArrayOperand
   | StringArrayOperand
   | HandleOperand
+  | LabelOperand
   | SerializableOperand
   | OtherOperand
   | number;
+
+export type BuilderOperand = NonlabelBuilderOperand | LabelOperand;
 
 export type BuilderOperands =
   | []
