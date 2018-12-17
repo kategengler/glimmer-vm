@@ -59,8 +59,7 @@ export type StatementCompilerFunction<T extends TupleSyntax, Locator> = ((
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isComponentAttrs: boolean
+  meta: ContainingMetadata<Locator>
 ) => void);
 export type SimpleCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
@@ -159,8 +158,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     encoder: OpcodeBuilderEncoder,
     resolver: CompileTimeLookup<Locator>,
     compiler: OpcodeBuilderCompiler<Locator>,
-    meta: ContainingMetadata<Locator>,
-    isComponentAttrs: boolean
+    meta: ContainingMetadata<Locator>
   ): void {
     let name: number = sexp![this.offset];
     let index = this.names[name];
@@ -175,13 +173,13 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     if (func.type === 'mini') {
       func.f(sexp as Syntax, { encoder, resolver, meta });
     } else if (func.type === 'statement') {
-      func.f(sexp as Syntax, encoder, resolver, compiler, meta, isComponentAttrs);
+      func.f(sexp as Syntax, encoder, resolver, compiler, meta);
     } else {
       func.f(sexp as Syntax, encoder, meta);
     }
   }
 
-  compileStatement(sexp: Syntax, builder: OpcodeBuilder<Locator>, isComponentAttrs: boolean): void {
+  compileStatement(sexp: Syntax, builder: OpcodeBuilder<Locator>): void {
     let name: number = sexp[this.offset];
     let index = this.names[name];
     let func = this.funcs[index];
@@ -193,20 +191,13 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     if (func.type === 'leaf') {
       func.f(sexp, builder.encoder, builder.meta);
     } else if (func.type === 'statement') {
-      func.f(
-        sexp,
-        builder.encoder,
-        builder.resolver,
-        builder.compiler,
-        builder.meta,
-        isComponentAttrs
-      );
+      func.f(sexp, builder.encoder, builder.resolver, builder.compiler, builder.meta);
     } else {
       func.f(sexp, builder);
     }
   }
 
-  compile(sexp: Syntax, builder: OpcodeBuilder<Locator>, isComponentAttrs: boolean): void {
+  compile(sexp: Syntax, builder: OpcodeBuilder<Locator>): void {
     let name: number = sexp[this.offset];
     let index = this.names[name];
     let func = this.funcs[index];
@@ -218,14 +209,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     if (func.type === 'leaf') {
       func.f(sexp, builder.encoder, builder.meta);
     } else if (func.type === 'statement') {
-      func.f(
-        sexp,
-        builder.encoder,
-        builder.resolver,
-        builder.compiler,
-        builder.meta,
-        isComponentAttrs
-      );
+      func.f(sexp, builder.encoder, builder.resolver, builder.compiler, builder.meta);
     } else {
       func.f(sexp, builder);
     }
@@ -331,8 +315,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
         attrsBlock = inlineBlock(
           { statements: wrappedAttrs, parameters: EMPTY_ARRAY },
           compiler,
-          meta,
-          true
+          meta
         );
       }
 
@@ -363,12 +346,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
         ..._attrs,
         [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, false],
       ];
-      let attrsBlock = inlineBlock(
-        { statements: attrs, parameters: EMPTY_ARRAY },
-        compiler,
-        meta,
-        true
-      );
+      let attrsBlock = inlineBlock({ statements: attrs, parameters: EMPTY_ARRAY }, compiler, meta);
 
       if (compilable) {
         encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
@@ -450,21 +428,13 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
   STATEMENTS.addStatement(
     Ops.ClientSideStatement,
-    (
-      sexp: WireFormat.Statements.ClientSide,
-      encoder,
-      resolver,
-      compiler,
-      meta,
-      isComponentAttrs
-    ) => {
+    (sexp: WireFormat.Statements.ClientSide, encoder, resolver, compiler, meta) => {
       CLIENT_SIDE.compileSimple(
         sexp as ClientSide.ClientSideStatement,
         encoder,
         resolver,
         compiler,
-        meta,
-        isComponentAttrs
+        meta
       );
     }
   );
@@ -510,9 +480,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
   CLIENT_SIDE.addLeaf(
     ClientSide.Ops.SetComponentAttrs,
-    (sexp: ClientSide.SetComponentAttrs, encoder) => {
-      encoder.isComponentAttrs = sexp[2];
-    }
+    (sexp: ClientSide.SetComponentAttrs, encoder) => {}
   );
 
   CLIENT_SIDE.addLeaf(ClientSide.Ops.Debugger, () => {
@@ -841,12 +809,12 @@ export function populateBuiltins<Locator>(
       },
 
       ifTrue() {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false);
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          invokeStaticBlock(encoder, compiler, blocks.get('else')!, false);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
         }
       },
     });
@@ -878,12 +846,12 @@ export function populateBuiltins<Locator>(
 
       ifTrue() {
         if (blocks.has('else')) {
-          invokeStaticBlock(encoder, compiler, blocks.get('else')!, false);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
         }
       },
 
       ifFalse() {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false);
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
       },
     });
   });
@@ -914,12 +882,12 @@ export function populateBuiltins<Locator>(
       },
 
       ifTrue() {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false, 1);
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 1);
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          invokeStaticBlock(encoder, compiler, blocks.get('else')!, false);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
         }
       },
     });
@@ -976,7 +944,7 @@ export function populateBuiltins<Locator>(
             reserveTarget(encoder, Op.Iterate, 'BREAK');
 
             label(encoder, 'BODY');
-            invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false, 2);
+            invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 2);
             encoder.push(Op.Pop, 2);
             reserveMachineTarget(encoder, MachineOp.Jump, 'FINALLY');
 
@@ -988,7 +956,7 @@ export function populateBuiltins<Locator>(
         label(encoder, 'ELSE');
 
         if (blocks.has('else')) {
-          invokeStaticBlock(encoder, compiler, blocks.get('else')!, false);
+          invokeStaticBlock(encoder, compiler, blocks.get('else')!);
         }
       },
     });
@@ -1021,7 +989,7 @@ export function populateBuiltins<Locator>(
 
       ifTrue() {
         remoteElement(encoder, () =>
-          invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false)
+          invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')))
         );
       },
     });
@@ -1034,10 +1002,10 @@ export function populateBuiltins<Locator>(
       params(expressions, { encoder, resolver, meta });
 
       dynamicScope(encoder, names, () => {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false);
+        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
       });
     } else {
-      invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), false);
+      invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')));
     }
   });
 

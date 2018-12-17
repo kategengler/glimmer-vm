@@ -88,7 +88,7 @@ export class EmberishGlimmerComponentManager
         let layout = template.create(resolver.compiler).asLayout();
 
         return {
-          handle: layout.compile(false),
+          handle: layout.compile(),
           symbolTable: layout.symbolTable,
         };
       };

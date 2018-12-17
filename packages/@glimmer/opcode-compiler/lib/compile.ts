@@ -9,15 +9,14 @@ import builder from './opcode-builder/builder';
 export function compile<Locator>(
   statements: Statement[],
   compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isComponentAttrs: boolean
+  meta: ContainingMetadata<Locator>
 ): number {
   let b = builder(compiler, meta);
 
   let sCompiler = statementCompiler();
 
   for (let i = 0; i < statements.length; i++) {
-    sCompiler.compile(statements[i], b, isComponentAttrs);
+    sCompiler.compile(statements[i], b);
   }
 
   let handle = b.encoder.commit(compiler, meta.size);

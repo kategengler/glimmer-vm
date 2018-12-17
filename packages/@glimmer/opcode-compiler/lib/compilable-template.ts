@@ -25,19 +25,14 @@ export class CompilableProgram<Locator> implements ICompilableProgram {
     return this.layout.block;
   }
 
-  compile(isComponentAttrs: boolean): number {
+  compile(): number {
     if (this.compiled !== null) return this.compiled;
 
     this.compiled = PLACEHOLDER_HANDLE;
 
     let { layout } = this;
 
-    return (this.compiled = compile(
-      layout.block.statements,
-      this.compiler,
-      meta(layout),
-      isComponentAttrs
-    ));
+    return (this.compiled = compile(layout.block.statements, this.compiler, meta(layout)));
   }
 }
 
@@ -47,8 +42,7 @@ export class CompilableBlockImpl<Locator> implements CompilableTemplate<BlockSym
   constructor(
     private compiler: OpcodeBuilderCompiler<Locator>,
     private block: SerializedInlineBlock,
-    private meta: ContainingMetadata<Locator>,
-    private isComponentAttrs: boolean
+    private meta: ContainingMetadata<Locator>
   ) {}
 
   get symbolTable(): BlockSymbolTable {
@@ -64,11 +58,6 @@ export class CompilableBlockImpl<Locator> implements CompilableTemplate<BlockSym
     // be known synchronously and must be linked lazily.
     this.compiled = PLACEHOLDER_HANDLE;
 
-    return (this.compiled = compile(
-      this.block.statements,
-      this.compiler,
-      this.meta,
-      this.isComponentAttrs
-    ));
+    return (this.compiled = compile(this.block.statements, this.compiler, this.meta));
   }
 }

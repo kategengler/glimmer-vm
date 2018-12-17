@@ -24,9 +24,9 @@ export function compileArgs<Locator>(
   let { encoder } = state;
 
   if (blocks.hasAny) {
-    pushYieldableBlock(encoder, blocks.get('default'), false);
-    pushYieldableBlock(encoder, blocks.get('else'), false);
-    pushYieldableBlock(encoder, blocks.get('attrs'), true);
+    pushYieldableBlock(encoder, blocks.get('default'));
+    pushYieldableBlock(encoder, blocks.get('else'));
+    pushYieldableBlock(encoder, blocks.get('attrs'));
   }
 
   let count = compileParams(state, params);
@@ -99,7 +99,7 @@ export function blockForLayout<Locator>(
     parameters: EMPTY_ARRAY,
   };
 
-  return new CompilableBlockImpl(compiler, block, meta(layout), false);
+  return new CompilableBlockImpl(compiler, block, meta(layout));
 }
 
 export function meta<Locator>(layout: LayoutWithContext<Locator>): ContainingMetadata<Locator> {

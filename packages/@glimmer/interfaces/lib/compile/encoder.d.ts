@@ -13,7 +13,6 @@ export interface Labels<InstructionEncoder> {
 }
 
 export interface Encoder<InstructionEncoder, Op extends number, MachineOp extends number> {
-  isComponentAttrs: boolean;
   isEager: boolean;
 
   readonly constants: CompileTimeConstants;

@@ -33,7 +33,7 @@ function render(template: Template, context = {}) {
   let cursor = { element: root, nextSibling: null };
 
   let compilable = template.asLayout();
-  let handle = compilable.compile(false);
+  let handle = compilable.compile();
 
   let templateIterator = renderMain(
     env.program,

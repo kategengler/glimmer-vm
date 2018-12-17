@@ -20,18 +20,17 @@ import { NamedBlocksImpl } from '../../utils';
 export function invokeStatic(
   encoder: OpcodeBuilderEncoder,
   compilable: CompilableTemplate,
-  isEager: boolean,
-  isComponentAttrs: boolean
+  isEager: boolean
 ) {
   if (isEager) {
-    let handle = compilable.compile(isComponentAttrs);
+    let handle = compilable.compile();
 
     // If the handle for the invoked component is not yet known (for example,
     // because this is a recursive invocation and we're still compiling), push a
     // function that will produce the correct handle when the heap is
     // serialized.
     if (handle === PLACEHOLDER_HANDLE) {
-      encoder.pushMachine(MachineOp.InvokeStatic, () => compilable.compile(isComponentAttrs));
+      encoder.pushMachine(MachineOp.InvokeStatic, () => compilable.compile());
     } else {
       encoder.pushMachine(MachineOp.InvokeStatic, handle);
     }
@@ -58,18 +57,14 @@ export function yieldBlock<Locator>(
   encoder.pushMachine(MachineOp.PopFrame);
 }
 
-export function pushYieldableBlock(
-  encoder: OpcodeBuilderEncoder,
-  block: Option<CompilableBlock>,
-  isComponentAttrs: boolean
-) {
+export function pushYieldableBlock(encoder: OpcodeBuilderEncoder, block: Option<CompilableBlock>) {
   pushSymbolTable(encoder, block && block.symbolTable);
   encoder.push(Op.PushBlockScope);
 
   if (block === null) {
     primitive(encoder, null);
   } else if (encoder.isEager) {
-    primitive(encoder, block.compile(isComponentAttrs));
+    primitive(encoder, block.compile());
   } else {
     encoder.push(Op.Constant, { type: 'other', value: block });
   }
@@ -78,13 +73,12 @@ export function pushYieldableBlock(
 export function pushCompilable(
   encoder: OpcodeBuilderEncoder,
   block: Option<CompilableTemplate>,
-  isEager: boolean,
-  isComponentAttrs: boolean
+  isEager: boolean
 ) {
   if (block === null) {
     primitive(encoder, null);
   } else if (isEager) {
-    primitive(encoder, block.compile(isComponentAttrs));
+    primitive(encoder, block.compile());
   } else {
     encoder.push(Op.Constant, { type: 'other', value: block });
   }
@@ -94,7 +88,6 @@ export function invokeStaticBlock<Locator>(
   encoder: OpcodeBuilderEncoder,
   compiler: OpcodeBuilderCompiler<Locator>,
   block: CompilableBlock,
-  isComponentAttrs: boolean,
   callerCount = 0
 ): void {
   let { parameters } = block.symbolTable;
@@ -112,7 +105,7 @@ export function invokeStaticBlock<Locator>(
     }
   }
 
-  pushCompilable(encoder, block, compiler.isEager, isComponentAttrs);
+  pushCompilable(encoder, block, compiler.isEager);
   if (!compiler.isEager) encoder.push(Op.CompileBlock);
   encoder.pushMachine(MachineOp.InvokeVirtual);
 
@@ -134,10 +127,9 @@ export function pushSymbolTable(encoder: OpcodeBuilderEncoder, table: Option<Sym
 export function inlineBlock<Locator>(
   block: WireFormat.SerializedInlineBlock,
   compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>,
-  isComponentAttrs: boolean
+  meta: ContainingMetadata<Locator>
 ): CompilableBlockImpl<Locator> {
-  return new CompilableBlockImpl(compiler, block, meta, isComponentAttrs);
+  return new CompilableBlockImpl(compiler, block, meta);
 }
 
 export function templates<Locator>(
@@ -148,6 +140,6 @@ export function templates<Locator>(
   return NamedBlocksImpl.fromWireFormat(blocks, block => {
     if (!block) return null;
 
-    return inlineBlock(block, compiler, meta, false);
+    return inlineBlock(block, compiler, meta);
   });
 }

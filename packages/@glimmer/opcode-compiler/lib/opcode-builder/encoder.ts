@@ -31,7 +31,6 @@ export class LabelsImpl implements Labels<InstructionEncoder> {
 
 export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
   private labelsStack = new Stack<OpcodeBuilderLabels>();
-  isComponentAttrs = false;
 
   constructor(
     private encoder: InstructionEncoder,

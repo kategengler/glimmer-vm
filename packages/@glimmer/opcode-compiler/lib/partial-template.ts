@@ -8,7 +8,7 @@ export class PartialDefinition {
 
   getPartial(): { symbolTable: ProgramSymbolTable; handle: number } {
     let partial = this.template.asPartial();
-    let handle = partial.compile(false);
+    let handle = partial.compile();
     return { symbolTable: partial.symbolTable, handle };
   }
 }
