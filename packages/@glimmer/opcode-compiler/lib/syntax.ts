@@ -263,33 +263,21 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     staticAttr(encoder, name, namespace, value as string);
   });
 
-  STATEMENTS.addStatement(
-    Ops.DynamicAttr,
-    (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
-      dynamicAttr({ encoder, resolver, meta }, sexp, false);
-    }
-  );
+  STATEMENTS.addSimple(Ops.DynamicAttr, (sexp: S.DynamicAttr, state) => {
+    dynamicAttr(state, sexp, false);
+  });
 
-  STATEMENTS.addStatement(
-    Ops.ComponentAttr,
-    (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
-      componentAttr({ encoder, resolver, meta }, sexp, false);
-    }
-  );
+  STATEMENTS.addSimple(Ops.ComponentAttr, (sexp: S.DynamicAttr, state) => {
+    componentAttr(state, sexp, false);
+  });
 
-  STATEMENTS.addStatement(
-    Ops.TrustingAttr,
-    (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
-      dynamicAttr({ encoder, resolver, meta }, sexp, true);
-    }
-  );
+  STATEMENTS.addSimple(Ops.TrustingAttr, (sexp: S.DynamicAttr, state) => {
+    dynamicAttr(state, sexp, true);
+  });
 
-  STATEMENTS.addStatement(
-    Ops.TrustingComponentAttr,
-    (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
-      componentAttr({ encoder, resolver, meta }, sexp, true);
-    }
-  );
+  STATEMENTS.addSimple(Ops.TrustingComponentAttr, (sexp: S.DynamicAttr, state) => {
+    componentAttr(state, sexp, true);
+  });
 
   STATEMENTS.addLeaf(Ops.OpenElement, (sexp: S.OpenElement, encoder) => {
     encoder.push(Op.OpenElement, str(sexp[1]));
@@ -637,7 +625,7 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     encoder.push(Op.HasBlock, sexp[1]);
   });
 
-  EXPRESSIONS.addLeaf(Ops.HasBlockParams, (sexp: E.HasBlockParams, encoder, _meta) => {
+  EXPRESSIONS.addLeaf(Ops.HasBlockParams, (sexp: E.HasBlockParams, encoder) => {
     hasBlockParams(encoder, sexp[1]);
   });
 
