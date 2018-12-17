@@ -2,7 +2,6 @@ import { OpcodeSize } from '@glimmer/encoder';
 import {
   OpcodeBuilderEncoder,
   num,
-  BuilderOperand,
   bool,
   str,
   Block,
@@ -14,7 +13,7 @@ import { PrimitiveType } from '@glimmer/program';
 import { Op, MachineOp, SavedRegister, $v0 } from '@glimmer/vm';
 import { Primitive } from '../../interfaces';
 import { reserveTarget } from './labels';
-import { Option } from '@glimmer/interfaces';
+import { Option, BuilderOperand } from '@glimmer/interfaces';
 import { compileArgs } from './shared';
 import { EMPTY_BLOCKS } from '../../utils';
 import { ExprCompilerState } from '../../syntax';

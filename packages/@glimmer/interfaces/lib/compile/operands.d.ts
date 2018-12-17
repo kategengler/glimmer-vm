@@ -1,3 +1,10 @@
+import { Option } from '@glimmer/interfaces';
+
+export interface OptionStringOperand {
+  readonly type: 'option-string';
+  readonly value: Option<string>;
+}
+
 export interface StringOperand {
   readonly type: 'string';
   readonly value: string;
@@ -40,6 +47,7 @@ export interface OtherOperand {
 }
 
 export type BuilderOperand =
+  | OptionStringOperand
   | StringOperand
   | BooleanOperand
   | NumberOperand

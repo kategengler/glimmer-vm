@@ -145,10 +145,10 @@ export function invokeStaticComponent<Locator>(
         }
 
         if (callerBlock) {
-          pushYieldableBlock(encoder, callerBlock, symbol === ATTRS_BLOCK);
+          pushYieldableBlock(encoder, callerBlock);
           bindings.push({ symbol: i + 1, isBlock: true });
         } else {
-          pushYieldableBlock(encoder, null, symbol === ATTRS_BLOCK);
+          pushYieldableBlock(encoder, null);
           bindings.push({ symbol: i + 1, isBlock: true });
         }
 
@@ -189,7 +189,7 @@ export function invokeStaticComponent<Locator>(
     }
   }
 
-  invokeStatic(encoder, layout, compiler.isEager, false);
+  invokeStatic(encoder, layout, compiler.isEager);
 
   if (capabilities.createInstance) {
     encoder.push(Op.DidRenderLayout, $s0);
@@ -271,7 +271,7 @@ export function wrappedComponent<Locator>(
 
     label(encoder, 'BODY');
 
-    invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler), false);
+    invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler));
 
     encoder.push(Op.Fetch, $s1);
     reserveTarget(encoder, Op.JumpUnless, 'END');
@@ -356,7 +356,7 @@ export function invokeComponent<Locator>(
   invokePreparedComponent(encoder, blocks.has('default'), bindableBlocks, bindableAtNames, () => {
     if (layout) {
       pushSymbolTable(encoder, layout.symbolTable);
-      pushCompilable(encoder, layout, compiler.isEager, false);
+      pushCompilable(encoder, layout, compiler.isEager);
       if (!compiler.isEager) encoder.push(Op.CompileBlock);
     } else {
       encoder.push(Op.GetComponentLayout, $s0);

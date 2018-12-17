@@ -1,6 +1,13 @@
 import { InstructionEncoder, OpcodeSize } from '@glimmer/encoder';
-import { CompileTimeConstants, Encoder, Labels, STDLib } from '@glimmer/interfaces';
-import { BuilderOperands, BuilderOperand, Operands, OpcodeBuilderCompiler } from './interfaces';
+import {
+  CompileTimeConstants,
+  Encoder,
+  Labels,
+  STDLib,
+  BuilderOperand,
+  BuilderOperands,
+} from '@glimmer/interfaces';
+import { Operands, OpcodeBuilderCompiler } from './interfaces';
 import { MachineOp, Op } from '@glimmer/vm';
 import { LazyConstants } from '@glimmer/program';
 import { Stack, dict, expect } from '@glimmer/util';
@@ -111,6 +118,9 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
     switch (operand.type) {
       case 'string':
         return this.constants.string(operand.value);
+      case 'option-string':
+        if (operand.value === null) return 0;
+        else return this.constants.string(operand.value);
       case 'boolean':
         return (operand.value as any) | 0;
       case 'number':

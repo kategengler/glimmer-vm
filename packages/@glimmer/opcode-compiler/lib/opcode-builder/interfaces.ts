@@ -19,6 +19,7 @@ import {
   StringOperand,
   SerializableOperand,
   OtherOperand,
+  OptionStringOperand,
 } from '@glimmer/interfaces';
 import * as WireFormat from '@glimmer/wire-format';
 
@@ -105,6 +106,10 @@ export function str(value: string): StringOperand {
   return { type: 'string', value };
 }
 
+export function optionStr(value: Option<string>): OptionStringOperand {
+  return { type: 'option-string', value };
+}
+
 export function bool(value: boolean): BooleanOperand {
   return { type: 'boolean', value };
 }
@@ -138,23 +143,6 @@ export function serializable(value: unknown): SerializableOperand {
 export function other(value: unknown): OtherOperand {
   return { type: 'other', value };
 }
-
-export type BuilderOperand =
-  | StringOperand
-  | BooleanOperand
-  | NumberOperand
-  | ArrayOperand
-  | StringArrayOperand
-  | HandleOperand
-  | SerializableOperand
-  | OtherOperand
-  | number;
-
-export type BuilderOperands =
-  | []
-  | [BuilderOperand]
-  | [BuilderOperand, BuilderOperand]
-  | [BuilderOperand, BuilderOperand, BuilderOperand];
 
 export type Operand = number | (() => number);
 

@@ -17,6 +17,8 @@ import OpcodeBuilder, {
   serializable,
   strArray,
   arr,
+  optionStr,
+  bool,
 } from './opcode-builder/interfaces';
 
 import Ops = WireFormat.Ops;
@@ -264,28 +266,28 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   STATEMENTS.addStatement(
     Ops.DynamicAttr,
     (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
-      dynamicAttr({ encoder, resolver, meta }, sexp, false, false);
+      dynamicAttr({ encoder, resolver, meta }, sexp, false);
     }
   );
 
   STATEMENTS.addStatement(
     Ops.ComponentAttr,
     (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
-      dynamicAttr({ encoder, resolver, meta }, sexp, false, true);
+      componentAttr({ encoder, resolver, meta }, sexp, false);
     }
   );
 
   STATEMENTS.addStatement(
     Ops.TrustingAttr,
     (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
-      dynamicAttr({ encoder, resolver, meta }, sexp, true, false);
+      dynamicAttr({ encoder, resolver, meta }, sexp, true);
     }
   );
 
   STATEMENTS.addStatement(
     Ops.TrustingComponentAttr,
     (sexp: S.DynamicAttr, encoder, resolver, _compiler, meta) => {
-      dynamicAttr({ encoder, resolver, meta }, sexp, true, true);
+      componentAttr({ encoder, resolver, meta }, sexp, true);
     }
   );
 
@@ -306,11 +308,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
       let attrsBlock = null;
       if (attrs.length > 0) {
-        let wrappedAttrs: WireFormat.Statement[] = [
-          [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, true],
-          ...attrs,
-          [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, false],
-        ];
+        let wrappedAttrs: WireFormat.Statement[] = [...attrs];
 
         attrsBlock = inlineBlock(
           { statements: wrappedAttrs, parameters: EMPTY_ARRAY },
@@ -341,11 +339,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     );
 
     if (layoutHandle !== null && capabilities !== null) {
-      let attrs: WireFormat.Statement[] = [
-        [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, true],
-        ..._attrs,
-        [Ops.ClientSideStatement, ClientSide.Ops.SetComponentAttrs, false],
-      ];
+      let attrs: WireFormat.Statement[] = [..._attrs];
       let attrsBlock = inlineBlock({ statements: attrs, parameters: EMPTY_ARRAY }, compiler, meta);
 
       if (compilable) {
@@ -478,11 +472,6 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     encoder.push(Op.DidCreateElement, $s0);
   });
 
-  CLIENT_SIDE.addLeaf(
-    ClientSide.Ops.SetComponentAttrs,
-    (sexp: ClientSide.SetComponentAttrs, encoder) => {}
-  );
-
   CLIENT_SIDE.addLeaf(ClientSide.Ops.Debugger, () => {
     // tslint:disable-next-line:no-debugger
     debugger;
@@ -498,35 +487,51 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 function dynamicAttr<Locator>(
   state: ExprCompilerState<Locator>,
   sexp: S.DynamicAttr | S.TrustingAttr,
-  trusting: boolean,
-  isComponentAttrs: boolean
+  trusting: boolean
 ) {
   let [, name, value, namespace] = sexp;
 
   expr(value, state);
 
   if (namespace) {
-    finishDynamicAttr(state.encoder, name, namespace, trusting, isComponentAttrs);
+    finishDynamicAttr(state.encoder, name, namespace, trusting);
   } else {
-    finishDynamicAttr(state.encoder, name, null, trusting, isComponentAttrs);
+    finishDynamicAttr(state.encoder, name, null, trusting);
   }
 }
 
 export function finishDynamicAttr(
   encoder: OpcodeBuilderEncoder,
-  _name: string,
-  _namespace: Option<string>,
-  trusting: boolean,
-  isComponentAttrs: boolean
+  name: string,
+  namespace: Option<string>,
+  trusting: boolean
 ) {
-  let name = str(_name);
-  let namespace = _namespace ? str(_namespace) : 0;
+  encoder.push(Op.DynamicAttr, str(name), bool(trusting), optionStr(namespace));
+}
 
-  if (isComponentAttrs) {
-    encoder.push(Op.ComponentAttr, name, trusting === true ? 1 : 0, namespace);
+function componentAttr<Locator>(
+  state: ExprCompilerState<Locator>,
+  sexp: S.DynamicAttr | S.TrustingAttr,
+  trusting: boolean
+) {
+  let [, name, value, namespace] = sexp;
+
+  expr(value, state);
+
+  if (namespace) {
+    finishComponentAttr(state.encoder, name, namespace, trusting);
   } else {
-    encoder.push(Op.DynamicAttr, name, trusting === true ? 1 : 0, namespace);
+    finishComponentAttr(state.encoder, name, null, trusting);
   }
+}
+
+export function finishComponentAttr(
+  encoder: OpcodeBuilderEncoder,
+  name: string,
+  namespace: Option<string>,
+  trusting: boolean
+) {
+  encoder.push(Op.ComponentAttr, str(name), bool(trusting), optionStr(namespace));
 }
 
 export function compileExpression<Locator>(
