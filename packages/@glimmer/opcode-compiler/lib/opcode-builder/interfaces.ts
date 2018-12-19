@@ -7,7 +7,6 @@ import {
   NamedBlocks,
   ComponentCapabilities,
   CompilableProgram,
-  STDLib,
   CompileTimeLookup,
   ContainingMetadata,
   Encoder,
@@ -168,5 +167,4 @@ export default interface OpcodeBuilder<Locator = unknown> {
   readonly compiler: OpcodeBuilderCompiler<Locator>;
   readonly encoder: OpcodeBuilderEncoder;
   readonly meta: ContainingMetadata<Locator>;
-  readonly stdLib: STDLib;
 }

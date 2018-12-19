@@ -41,9 +41,10 @@ export class WrappedBuilder<Locator> implements CompilableProgram {
   compile(): number {
     if (this.compiled !== null) return this.compiled;
 
-    let b = builder(this.compiler, meta(this.layout));
+    let m = meta(this.layout);
+    let b = builder(this.compiler, m, m.size);
 
-    return (this.compiled = wrappedComponent(
+    let compiled = (this.compiled = wrappedComponent(
       b.encoder,
       b.resolver,
       b.compiler,
@@ -51,5 +52,9 @@ export class WrappedBuilder<Locator> implements CompilableProgram {
       this.layout,
       this.attrsBlockNumber
     ));
+
+    this.compiler.patchStdlibs();
+
+    return compiled;
   }
 }

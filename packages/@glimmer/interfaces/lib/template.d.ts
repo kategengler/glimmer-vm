@@ -12,9 +12,9 @@ import {
   Core,
   SerializedInlineBlock,
 } from '@glimmer/wire-format';
-import { CompileTimeProgram } from '@glimmer/interfaces';
+import { CompileTimeProgram, Operand } from '@glimmer/interfaces';
 import { Encoder } from './compile/encoder';
-import { Heap } from '@glimmer/program';
+import { CompileTimeHeapImpl } from '@glimmer/program';
 
 export type CompilableBlock = CompilableTemplate<BlockSymbolTable>;
 
@@ -60,10 +60,13 @@ export interface Template<Locator = Opaque> {
 
 export interface STDLib {
   main: number;
-  getAppend(trusting: boolean): number;
+  'cautious-append': number;
+  'trusting-append': number;
 }
 
-export type CompilerBuffer = Array<number | (() => number)>;
+export type STDLibName = keyof STDLib;
+
+export type CompilerBuffer = Array<Operand>;
 
 export interface ResolvedLayout {
   handle: number;
@@ -121,6 +124,7 @@ export interface BlockCompiler<Op extends number, MachineOp extends number> {
 export interface CompilerArtifacts {
   heap: CompileTimeHeap;
   constants: CompileTimeConstants;
+  stdlib: STDLib;
 }
 
 export interface Compiler<
@@ -131,15 +135,12 @@ export interface Compiler<
   MachineOp extends number
 > {
   readonly resolver: CompileTimeLookup<Locator>;
-  readonly stdLib: STDLib;
+  readonly heap: CompileTimeHeap;
   readonly constants: CompileTimeConstants;
   readonly isEager: boolean;
+  readonly stdlib: STDLib;
 
   commit(size: number, encoder: CompilerBuffer): number;
-
-  resolveLayoutForTag(tag: string, referrer: Opaque): MaybeResolvedLayout;
-  resolveHelper(name: string, referrer: Opaque): Option<number>;
-  resolveModifier(name: string, referrer: Opaque): Option<number>;
 
   compileInline(
     sexp: Statements.Append,
@@ -160,6 +161,7 @@ export interface Compiler<
   ): void;
 
   artifacts(): CompilerArtifacts;
+  patchStdlibs(): void;
 }
 
 export interface CompilableTemplate<S = SymbolTable> {

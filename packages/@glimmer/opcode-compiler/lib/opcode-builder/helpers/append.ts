@@ -14,6 +14,9 @@ export function guardedAppend<Locator>(
 
   encoder.push(MachineOp.PushFrame);
   expr(expression, state);
-  encoder.push(MachineOp.InvokeStatic, encoder.stdlib.getAppend(trusting));
+  encoder.push(MachineOp.InvokeStatic, {
+    type: 'stdlib',
+    value: trusting ? 'trusting-append' : 'cautious-append',
+  });
   encoder.push(MachineOp.PopFrame);
 }

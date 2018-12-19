@@ -4,8 +4,6 @@ import { expect } from '@glimmer/util';
 import { SerializedTemplateBlock } from '@glimmer/wire-format';
 import {
   ProgramSymbolTable,
-  Recast,
-  Unique,
   ModuleLocator,
   TemplateLocator,
   CompilableProgram,
@@ -25,7 +23,7 @@ import DebugConstants from './debug-constants';
 import ExternalModuleTable from './external-module-table';
 import BundleCompilerDelegate from './delegate';
 import BundleCompilerLookup from './lookup';
-import { OpcodeBuilderCompiler } from '@glimmer/opcode-compiler/lib/opcode-builder/interfaces';
+import { OpcodeBuilderCompiler, program } from '@glimmer/opcode-compiler';
 
 export interface BundleCompileOptions {
   plugins: ASTPluginBuilder[];
@@ -109,10 +107,10 @@ export default class BundleCompiler<Locator> {
     this.delegate = delegate;
     let macros = (this.macros = options.macros || new Macros());
 
-    let program = options.program || new WriteOnlyProgram(new DebugConstants());
+    let p = options.program || program(new DebugConstants());
     this.plugins = options.plugins || [];
 
-    this.compiler = new CompilerImpl(macros, program, this.compilerResolver(), 'eager');
+    this.compiler = new CompilerImpl(macros, p, this.compilerResolver(), 'eager');
   }
 
   /**
@@ -155,7 +153,7 @@ export default class BundleCompiler<Locator> {
    * data segment.
    */
   compile(): BundleCompilationResult {
-    let { main } = this.compiler.stdLib;
+    let { heap, constants, stdlib } = this.compiler.artifacts();
     let symbolTables = new ModuleLocatorMap<ProgramSymbolTable>();
 
     this.compilableTemplates.forEach((template, locator) => {
@@ -163,11 +161,9 @@ export default class BundleCompiler<Locator> {
       symbolTables.set(locator, template.symbolTable);
     });
 
-    let { heap, constants } = this.compiler.artifacts();
-
     return {
-      main: main as Recast<Unique<'Handle'>, number>,
-      heap: heap.capture() as SerializedHeap,
+      main: stdlib.main,
+      heap: heap.capture(stdlib) as SerializedHeap,
       pool: constants.toPool(),
       table: this.resolver.getTable(),
       symbolTables,

@@ -1,9 +1,9 @@
-import { Heap } from './program';
 import { OpcodeSize } from '@glimmer/encoder';
+import { RuntimeHeap } from '@glimmer/interfaces';
 
 export class Opcode {
   public offset = 0;
-  constructor(private heap: Heap) {}
+  constructor(private heap: RuntimeHeap) {}
 
   get size() {
     let rawType = this.heap.getbyaddr(this.offset);

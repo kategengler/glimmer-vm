@@ -6,21 +6,24 @@ import {
   ConditionalReference,
 } from '@glimmer/runtime';
 import { dict } from '@glimmer/util';
-import { Dict, RuntimeResolver, Opaque, VMHandle } from '@glimmer/interfaces';
-import { Program } from '@glimmer/program';
+import { Dict, RuntimeResolver, Opaque, VMHandle, CompileTimeProgram } from '@glimmer/interfaces';
 import { Reference, isConst, OpaqueIterable } from '@glimmer/reference';
 
 import { KeyFor, Iterable } from './iterable';
+import { RuntimeProgram } from '@glimmer/program';
+import { TestMeta } from './modes/lazy/environment';
 
 export interface TestEnvironmentOptions {
   appendOperations: DOMTreeConstruction;
   updateOperations: IDOMChanges;
 }
 
+export type TestProgram = RuntimeProgram<TestMeta> & CompileTimeProgram;
+
 export default abstract class TestEnvironment<Locator> extends Environment {
   public compiledLayouts: Dict<VMHandle> = dict();
 
-  protected abstract program: Program<Locator>;
+  protected abstract program: TestProgram;
   protected abstract resolver: RuntimeResolver<Locator>;
 
   protocolForURL(url: string): string {

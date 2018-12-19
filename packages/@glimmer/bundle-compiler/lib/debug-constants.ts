@@ -1,4 +1,5 @@
 import { WriteOnlyConstants } from '@glimmer/program';
+import { assert } from '@glimmer/util';
 
 export default class DebugConstants extends WriteOnlyConstants {
   getNumber(value: number): number {
@@ -26,6 +27,7 @@ export default class DebugConstants extends WriteOnlyConstants {
   }
 
   resolveHandle<T>(s: number): T {
+    assert(typeof s === 'number', 'Cannot resolve undefined as a handle');
     return ({ handle: s } as any) as T;
   }
 

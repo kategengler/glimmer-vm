@@ -15,9 +15,12 @@ export {
   OpcodeBuilderEncoder,
 } from './lib/opcode-builder/interfaces';
 
-export { invokeStaticBlock } from './lib/opcode-builder/helpers/blocks';
+export { program } from './lib/opcode-builder/encoder';
 
-export { default as builder } from './lib/opcode-builder/builder';
+export { invokeStaticBlockWithStack, invokeStaticBlock } from './lib/opcode-builder/helpers/blocks';
+export { compileStd } from './lib/opcode-builder/helpers/stdlib';
+
+export { default as builder, StdLib } from './lib/opcode-builder/builder';
 
 export { PartialDefinition } from './lib/partial-template';
 

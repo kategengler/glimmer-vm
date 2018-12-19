@@ -28,7 +28,7 @@ operand-stack = [
 
 [machine.scall]
 
-format = ["InvokeStatic", "handle:handle"]
+format = ["InvokeStatic", "offset:u32"]
 operation = "Evaluate the handle."
 
 [machine.goto]

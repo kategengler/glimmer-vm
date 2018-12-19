@@ -3,17 +3,19 @@ import {
   CompileTimeConstants,
   Encoder,
   Labels,
-  STDLib,
   BuilderOperands,
   LabelOperand,
   MachineBuilderOperand,
   BuilderHandleThunk,
   Operand,
+  CompileTimeHeap,
+  CompileTimeProgram,
 } from '@glimmer/interfaces';
-import { OpcodeBuilderCompiler } from './interfaces';
 import { MachineOp, Op, isMachineOp } from '@glimmer/vm';
-import { LazyConstants } from '@glimmer/program';
+import { LazyConstants, CompileTimeHeapImpl, Program } from '@glimmer/program';
 import { Stack, dict, expect } from '@glimmer/util';
+import { commit } from '../compiler';
+import { compileStd } from './helpers/stdlib';
 
 export type OpcodeBuilderLabels = Labels<InstructionEncoder>;
 
@@ -41,37 +43,23 @@ export class LabelsImpl implements Labels<InstructionEncoder> {
 
 export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
   private labelsStack = new Stack<OpcodeBuilderLabels>();
+  private encoder: InstructionEncoder;
 
   constructor(
-    private encoder: InstructionEncoder,
     readonly constants: CompileTimeConstants,
-    readonly stdlib: STDLib,
-    readonly isEager: boolean
-  ) {}
-
-  get pos(): number {
-    return this.encoder.typePos;
+    readonly isEager: boolean,
+    private size: number
+  ) {
+    this.encoder = new InstructionEncoder([]);
   }
 
-  get nextPos(): number {
+  private get nextPos(): number {
     return this.encoder.size;
   }
 
-  commit(compiler: OpcodeBuilderCompiler<unknown>, size: number): number {
+  commit(heap: CompileTimeHeap): number {
     this.push(MachineOp.Return);
-    return compiler.commit(size, this.encoder.buffer);
-  }
-
-  reserve(name: Op) {
-    this.encoder.encode(name, 0, -1);
-  }
-
-  reserveWithOperand(name: Op, operand: number) {
-    this.encoder.encode(name, 0, -1, operand);
-  }
-
-  reserveMachine(name: MachineOp) {
-    this.encoder.encode(name, OpcodeSize.MACHINE_MASK, -1);
+    return commit(heap, this.size, this.encoder.buffer);
   }
 
   push(name: Op | MachineOp, ...args: BuilderOperands): void {
@@ -111,27 +99,25 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
       case 'string-array':
         return this.constants.stringArray(operand.value);
       case 'label':
-        this.target(this.nextPos + index!, operand.value);
+        this.currentLabels.target(this.nextPos + index!, operand.value);
         return -1;
       case 'serializable':
         return this.constants.serializable(operand.value);
       case 'other':
         return (this.constants as LazyConstants).other(operand.value);
+      case 'stdlib':
+        return operand;
       case 'handle':
         return this.constants.handle(operand.value);
     }
   }
 
-  get currentLabels(): OpcodeBuilderLabels {
+  private get currentLabels(): OpcodeBuilderLabels {
     return expect(this.labelsStack.current, 'bug: not in a label stack');
   }
 
   label(name: string) {
     this.currentLabels.label(name, this.nextPos);
-  }
-
-  target(at: number, target: string) {
-    this.currentLabels.target(at, target);
   }
 
   startLabels() {
@@ -142,4 +128,11 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
     let label = expect(this.labelsStack.pop(), 'unbalanced push and pop labels');
     label.patch(this.encoder);
   }
+}
+
+export function program(constants: CompileTimeConstants): CompileTimeProgram {
+  let heap = new CompileTimeHeapImpl();
+  let stdlib = compileStd(constants, heap);
+
+  return new Program(stdlib, constants, heap);
 }

@@ -2,6 +2,7 @@ import { Option, Dict } from '@glimmer/interfaces';
 
 const tuple = <T extends string[]>(...args: T) => args;
 
+// TODO: Why are there so many types here?
 export const OPERAND_TYPES = tuple(
   'unknown',
   'scope',
@@ -147,15 +148,30 @@ export function normalizeParsed(parsed: Dict<RawOperandMetadata>): Dict<Normaliz
   return out;
 }
 
-export function buildEnum(name: string, parsed: Dict<NormalizedMetadata>): string {
+export function buildEnum(
+  name: string,
+  parsed: Dict<NormalizedMetadata>,
+  offset: number,
+  max?: number
+): string {
   let e = [`export const enum ${name} {`];
 
-  for (let key of Object.keys(parsed)) {
-    e.push(`  ${parsed[key].name},`);
-  }
+  Object.keys(parsed).forEach((key, i) => {
+    e.push(`  ${parsed[key].name} = ${offset + i},`);
+  });
 
   e.push('  Size,');
   e.push('}');
+
+  if (max) {
+    e.push(
+      `export function is${name}(value: number): value is ${name} { return value >= ${offset} && value <= ${max}; }`
+    );
+  } else {
+    e.push(
+      `export function is${name}(value: number): value is ${name} { return value >= ${offset}; }`
+    );
+  }
 
   return e.join('\n');
 }

@@ -58,6 +58,7 @@ export class AppendOpcodes {
 
     if (DEBUG) {
       let pos = vm[INNER_VM].fetchRegister($pc) - opcode.size;
+
       /* tslint:disable */
       [opName, params] = debug(
         pos,

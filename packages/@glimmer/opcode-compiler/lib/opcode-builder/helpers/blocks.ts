@@ -32,6 +32,7 @@ export function invokeStatic(
     if (handle === PLACEHOLDER_HANDLE) {
       encoder.push(MachineOp.InvokeStatic, () => compilable.compile());
     } else {
+      console.log(handle);
       encoder.push(MachineOp.InvokeStatic, handle);
     }
   } else {
@@ -87,8 +88,22 @@ export function pushCompilable(
 export function invokeStaticBlock<Locator>(
   encoder: OpcodeBuilderEncoder,
   compiler: OpcodeBuilderCompiler<Locator>,
+  block: CompilableBlock
+): void {
+  encoder.push(MachineOp.PushFrame);
+
+  pushCompilable(encoder, block, compiler.isEager);
+  if (!compiler.isEager) encoder.push(Op.CompileBlock);
+  encoder.push(MachineOp.InvokeVirtual);
+
+  encoder.push(MachineOp.PopFrame);
+}
+
+export function invokeStaticBlockWithStack<Locator>(
+  encoder: OpcodeBuilderEncoder,
+  compiler: OpcodeBuilderCompiler<Locator>,
   block: CompilableBlock,
-  callerCount = 0
+  callerCount: number
 ): void {
   let { parameters } = block.symbolTable;
   let calleeCount = parameters.length;

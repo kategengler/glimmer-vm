@@ -31,9 +31,10 @@ import { resolveLayoutForTag } from './resolver';
 import { expr, params } from './opcode-builder/helpers/shared';
 import {
   yieldBlock,
-  invokeStaticBlock,
+  invokeStaticBlockWithStack,
   inlineBlock,
   templates,
+  invokeStaticBlock,
 } from './opcode-builder/helpers/blocks';
 import {
   pushPrimitiveReference,
@@ -875,7 +876,7 @@ export function populateBuiltins<Locator>(
       },
 
       ifTrue() {
-        invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 1);
+        invokeStaticBlockWithStack(encoder, compiler, unwrap(blocks.get('default')), 1);
       },
 
       ifFalse() {
@@ -937,7 +938,7 @@ export function populateBuiltins<Locator>(
             encoder.push(Op.Iterate, label('BREAK'));
 
             encoder.label('BODY');
-            invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default')), 2);
+            invokeStaticBlockWithStack(encoder, compiler, unwrap(blocks.get('default')), 2);
             encoder.push(Op.Pop, 2);
             encoder.push(MachineOp.Jump, label('FINALLY'));
 

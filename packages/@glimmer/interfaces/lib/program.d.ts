@@ -1,5 +1,7 @@
-import { Opaque, Unique } from './core';
+import { Opaque, Unique, Option } from './core';
 import { Op } from '@glimmer/vm';
+import { STDLib } from './template';
+import { StdlibOperand } from './compile';
 
 export interface Opcode {
   offset: number;
@@ -22,22 +24,31 @@ export interface SerializedHeap {
 export interface CompileTimeHeap {
   push(name: Op, op1?: number, op2?: number, op3?: number): void;
   pushPlaceholder(valueFunc: () => number): void;
+  pushStdlib(stdlib: StdlibOperand): void;
+  patchStdlibs(stdlib: STDLib): void;
   malloc(): number;
   finishMalloc(handle: number, scopeSize: number): void;
-  capture(offset?: number): SerializedHeap;
+  capture(stdlib: STDLib, offset?: number): SerializedHeap;
 
   // for debugging
   getaddr(handle: number): number;
   sizeof(handle: number): number;
 }
 
+export interface RuntimeHeap {
+  // for debugging
+  getaddr(handle: number): number;
+  sizeof(handle: number): number;
+  getbyaddr(address: number): number;
+  scopesizeof(handle: number): number;
+}
+
 export interface CompileTimeProgram {
   [key: number]: never;
 
-  constants: CompileTimeConstants;
-  heap: CompileTimeHeap;
-
-  opcode(offset: number): Opcode;
+  readonly stdlib: STDLib;
+  readonly constants: CompileTimeConstants;
+  readonly heap: CompileTimeHeap;
 }
 
 export type EMPTY_ARRAY = Array<ReadonlyArray<never>>;

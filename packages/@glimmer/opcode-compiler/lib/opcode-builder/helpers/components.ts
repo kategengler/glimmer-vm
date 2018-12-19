@@ -23,10 +23,10 @@ import { compileArgs, expr, blockForLayout } from './shared';
 import {
   pushYieldableBlock,
   yieldBlock,
-  invokeStaticBlock,
   pushSymbolTable,
   pushCompilable,
   invokeStatic,
+  invokeStaticBlock,
 } from './blocks';
 import { ATTRS_BLOCK, ExprCompilerState } from '../../syntax';
 import { labels } from './labels';
@@ -282,7 +282,7 @@ export function wrappedComponent<Locator>(
     encoder.push(Op.Load, $s1);
   });
 
-  let handle = encoder.commit(compiler, meta.size);
+  let handle = encoder.commit(compiler.heap);
 
   if (DEBUG) {
     debugCompiler(compiler, handle);

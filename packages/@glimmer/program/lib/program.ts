@@ -6,9 +6,13 @@ import {
   CompileTimeHeap,
   SerializedHeap,
   ConstantPool,
+  STDLib,
+  CompileTimeConstants,
+  RuntimeHeap,
+  StdlibOperand,
 } from '@glimmer/interfaces';
 import { DEBUG } from '@glimmer/local-debug-flags';
-import { Constants, WriteOnlyConstants, RuntimeConstants, RuntimeConstantsImpl } from './constants';
+import { Constants, RuntimeConstants, RuntimeConstantsImpl } from './constants';
 import { Opcode } from './opcode';
 import { assert } from '@glimmer/util';
 
@@ -37,8 +41,45 @@ function changeState(info: number, newState: number) {
 }
 
 export type Placeholder = [number, () => number];
+export type StdlibPlaceholder = [number, StdlibOperand];
 
 const PAGE_SIZE = 0x100000;
+
+export class RuntimeHeapImpl implements RuntimeHeap {
+  private heap: Uint16Array;
+  private table: number[];
+
+  constructor(serializedHeap: SerializedHeap) {
+    let { buffer, table } = serializedHeap;
+    this.heap = new Uint16Array(buffer);
+    this.table = table;
+  }
+
+  // It is illegal to close over this address, as compaction
+  // may move it. However, it is legal to use this address
+  // multiple times between compactions.
+  getaddr(handle: number): number {
+    return this.table[handle];
+  }
+
+  getbyaddr(address: number): number {
+    assert(this.heap[address] !== undefined, 'Access memory out of bounds of the heap');
+    return this.heap[address];
+  }
+
+  sizeof(handle: number): number {
+    if (DEBUG) {
+      let info = this.table[(handle as Recast<VMHandle, number>) + Size.INFO_OFFSET];
+      return info & Size.SIZE_MASK;
+    }
+    return -1;
+  }
+
+  scopesizeof(handle: number): number {
+    let info = this.table[(handle as Recast<VMHandle, number>) + Size.INFO_OFFSET];
+    return (info & Size.SCOPE_MASK) >> 16;
+  }
+}
 
 /**
  * The Heap is responsible for dynamically allocating
@@ -60,26 +101,18 @@ const PAGE_SIZE = 0x100000;
  * valid during the execution. This means you cannot close
  * over them as you will have a bad memory access exception.
  */
-export class Heap implements CompileTimeHeap {
+export class CompileTimeHeapImpl implements CompileTimeHeap {
   private heap: Uint16Array;
   private placeholders: Placeholder[] = [];
+  private stdlibs: StdlibPlaceholder[] = [];
   private table: number[];
   private offset = 0;
   private handle = 0;
   private capacity = PAGE_SIZE;
 
-  constructor(serializedHeap?: SerializedHeap) {
-    if (serializedHeap) {
-      let { buffer, table, handle } = serializedHeap;
-      this.heap = new Uint16Array(buffer);
-      this.table = table;
-      this.offset = this.heap.length;
-      this.handle = handle;
-      this.capacity = 0;
-    } else {
-      this.heap = new Uint16Array(PAGE_SIZE);
-      this.table = [];
-    }
+  constructor() {
+    this.heap = new Uint16Array(PAGE_SIZE);
+    this.table = [];
   }
 
   push(item: number): void {
@@ -209,6 +242,13 @@ export class Heap implements CompileTimeHeap {
     this.placeholders.push([address, valueFunc]);
   }
 
+  pushStdlib(operand: StdlibOperand): void {
+    this.sizeCheck();
+    let address = this.offset++;
+    this.heap[address] = Size.MAX_SIZE;
+    this.stdlibs.push([address, operand]);
+  }
+
   private patchPlaceholders() {
     let { placeholders } = this;
 
@@ -223,8 +263,25 @@ export class Heap implements CompileTimeHeap {
     }
   }
 
-  capture(offset = this.offset): SerializedHeap {
+  patchStdlibs(stdlib: STDLib): void {
+    let { stdlibs } = this;
+
+    for (let i = 0; i < stdlibs.length; i++) {
+      let [address, { value }] = stdlibs[i];
+
+      assert(
+        this.getbyaddr(address) === Size.MAX_SIZE,
+        `expected to find a placeholder value at ${address}`
+      );
+      this.setbyaddr(address, stdlib[value]);
+    }
+
+    this.stdlibs = [];
+  }
+
+  capture(stdlib: STDLib, offset = this.offset): SerializedHeap {
     this.patchPlaceholders();
+    this.patchStdlibs(stdlib);
 
     // Only called in eager mode
     let buffer = slice(this.heap, 0, offset).buffer;
@@ -236,22 +293,15 @@ export class Heap implements CompileTimeHeap {
   }
 }
 
+// TODO: Unravel this multi-purpose object
 export class WriteOnlyProgram implements CompileTimeProgram {
   [key: number]: never;
 
-  private _opcode: Opcode;
-
   constructor(
-    public constants: WriteOnlyConstants = new WriteOnlyConstants(),
-    public heap = new Heap()
-  ) {
-    this._opcode = new Opcode(this.heap);
-  }
-
-  opcode(offset: number): Opcode {
-    this._opcode.offset = offset;
-    return this._opcode;
-  }
+    readonly stdlib: STDLib,
+    readonly constants: CompileTimeConstants,
+    readonly heap: CompileTimeHeap
+  ) {}
 }
 
 export class RuntimeProgram<Locator> {
@@ -262,7 +312,7 @@ export class RuntimeProgram<Locator> {
     pool: ConstantPool,
     resolver: RuntimeResolver<Locator>
   ) {
-    let heap = new Heap(rawHeap);
+    let heap = new RuntimeHeapImpl(rawHeap);
     let constants = new RuntimeConstantsImpl(resolver, pool);
 
     return new RuntimeProgram(constants, heap);
@@ -270,7 +320,7 @@ export class RuntimeProgram<Locator> {
 
   private _opcode: Opcode;
 
-  constructor(public constants: RuntimeConstants<Locator>, public heap: Heap) {
+  constructor(public constants: RuntimeConstants<Locator>, public heap: RuntimeHeap) {
     this._opcode = new Opcode(this.heap);
   }
 
@@ -280,8 +330,25 @@ export class RuntimeProgram<Locator> {
   }
 }
 
+export class BothProgram<Locator> extends RuntimeProgram<Locator> implements CompileTimeProgram {
+  constructor(
+    readonly stdlib: STDLib,
+    readonly constants: CompileTimeConstants<Locator> & RuntimeConstants<Locator>,
+    readonly heap: CompileTimeHeap & RuntimeHeap
+  ) {
+    super(constants, heap);
+  }
+}
+
 export class Program<Locator> extends WriteOnlyProgram {
-  public constants!: Constants<Locator>;
+  readonly constants!: Constants<Locator>;
+  readonly heap!: CompileTimeHeapImpl;
+  private _opcode = new Opcode(this.heap);
+
+  opcode(offset: number): Opcode {
+    this._opcode.offset = offset;
+    return this._opcode;
+  }
 }
 
 function slice(arr: Uint16Array, start: number, end: number): Uint16Array {

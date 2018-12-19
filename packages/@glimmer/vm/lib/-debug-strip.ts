@@ -50,8 +50,8 @@ MACHINE_METADATA[MachineOp.InvokeStatic] = {
   stackChange: 0,
   ops: [
     {
-      name: 'handle',
-      type: 'handle',
+      name: 'offset',
+      type: 'u32',
     },
   ],
   operands: 1,

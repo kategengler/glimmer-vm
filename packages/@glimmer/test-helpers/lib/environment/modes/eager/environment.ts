@@ -1,12 +1,11 @@
 import { Opaque } from '@glimmer/util';
-import { Program } from '@glimmer/program';
 import { RuntimeResolver } from '@glimmer/interfaces';
 import { DOMTreeConstruction, DOMChanges } from '@glimmer/runtime';
 
-import TestEnvironment, { TestEnvironmentOptions } from '../../environment';
+import TestEnvironment, { TestEnvironmentOptions, TestProgram } from '../../environment';
 
 export default class EagerTestEnvironment extends TestEnvironment<Opaque> {
-  protected program!: Program<Opaque>;
+  protected program!: TestProgram;
   protected resolver!: RuntimeResolver<Opaque>;
 
   constructor(options?: TestEnvironmentOptions) {

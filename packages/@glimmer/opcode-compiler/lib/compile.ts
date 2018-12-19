@@ -11,7 +11,7 @@ export function compile<Locator>(
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>
 ): number {
-  let b = builder(compiler, meta);
+  let b = builder(compiler, meta, meta.size);
 
   let sCompiler = statementCompiler();
 
@@ -19,7 +19,7 @@ export function compile<Locator>(
     sCompiler.compile(statements[i], b);
   }
 
-  let handle = b.encoder.commit(compiler, meta.size);
+  let handle = b.encoder.commit(compiler.heap);
 
   if (DEBUG) {
     debugCompiler(compiler as OpcodeBuilderCompiler<Locator>, handle);

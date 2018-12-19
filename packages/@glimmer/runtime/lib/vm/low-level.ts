@@ -1,9 +1,10 @@
-import { Heap, Opcode } from '@glimmer/program';
-import { Option, Opaque } from '@glimmer/interfaces';
+import { Opcode } from '@glimmer/program';
+import { Option, Opaque, RuntimeHeap } from '@glimmer/interfaces';
 import { APPEND_OPCODES } from '../opcodes';
 import VM from './append';
 import { DEVMODE } from '@glimmer/local-debug-flags';
 import { MachineRegister, $pc, $ra, $fp, $sp, MachineOp } from '@glimmer/vm';
+import { assert } from '@glimmer/util';
 
 export interface LowLevelRegisters {
   [MachineRegister.pc]: number;
@@ -47,7 +48,7 @@ export default class LowLevelVM {
 
   constructor(
     public stack: Stack,
-    public heap: Heap,
+    public heap: RuntimeHeap,
     public program: Program,
     public externs: Externs,
     readonly registers: LowLevelRegisters
@@ -94,6 +95,8 @@ export default class LowLevelVM {
 
   // Save $pc into $ra, then jump to a new address in `program` (jal in MIPS)
   call(handle: number) {
+    assert(handle < 0b1111111111111111, `Jumping to placehoder address`);
+
     this.registers[$ra] = this.registers[$pc];
     this.registers[$pc] = this.heap.getaddr(handle);
   }

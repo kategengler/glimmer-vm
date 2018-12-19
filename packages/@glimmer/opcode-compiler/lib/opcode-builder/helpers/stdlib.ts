@@ -1,11 +1,10 @@
 import { Op, $s0 } from '@glimmer/vm';
-import { InstructionEncoder } from '@glimmer/encoder';
 
-import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from '../interfaces';
+import { OpcodeBuilderEncoder } from '../interfaces';
 import { invokePreparedComponent, invokeBareComponent } from './components';
 import { StdLib } from '../builder';
 import { EncoderImpl } from '../encoder';
-import { ContentType } from '@glimmer/interfaces';
+import { ContentType, CompileTimeConstants, CompileTimeHeap } from '@glimmer/interfaces';
 import { switchCases } from './conditional';
 
 export function main(encoder: OpcodeBuilderEncoder) {
@@ -49,24 +48,20 @@ export function stdAppend(encoder: OpcodeBuilderEncoder, trusting: boolean) {
   });
 }
 
-export function compileStd<Locator>(compiler: OpcodeBuilderCompiler<Locator>): StdLib {
-  let mainHandle = build(compiler, main);
-  let trustingGuardedAppend = build(compiler, encoder => stdAppend(encoder, true));
-  let cautiousGuardedAppend = build(compiler, encoder => stdAppend(encoder, false));
+export function compileStd(constants: CompileTimeConstants, heap: CompileTimeHeap): StdLib {
+  let mainHandle = build(constants, heap, main);
+  let trustingGuardedAppend = build(constants, heap, e => stdAppend(e, true));
+  let cautiousGuardedAppend = build(constants, heap, e => stdAppend(e, false));
+
   return new StdLib(mainHandle, trustingGuardedAppend, cautiousGuardedAppend);
 }
 
-function build<Locator>(
-  compiler: OpcodeBuilderCompiler<Locator>,
+function build(
+  constants: CompileTimeConstants,
+  heap: CompileTimeHeap,
   callback: (builder: OpcodeBuilderEncoder) => void
 ): number {
-  let instructionEncoder = new InstructionEncoder([]);
-  let encoder = new EncoderImpl(
-    instructionEncoder,
-    compiler.constants,
-    compiler.stdLib,
-    compiler.isEager
-  );
+  let encoder = new EncoderImpl(constants, true, 0);
   callback(encoder);
-  return encoder.commit(compiler, 0);
+  return encoder.commit(heap);
 }

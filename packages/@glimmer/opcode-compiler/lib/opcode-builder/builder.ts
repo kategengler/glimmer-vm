@@ -1,7 +1,6 @@
 import OpcodeBuilder, { OpcodeBuilderCompiler } from './interfaces';
 import { ContainingMetadata } from '@glimmer/interfaces';
 import { EncoderImpl } from './encoder';
-import { InstructionEncoder } from '@glimmer/encoder';
 
 export class StdLib {
   constructor(
@@ -10,6 +9,14 @@ export class StdLib {
     private cautiousGuardedAppend: number
   ) {}
 
+  get 'trusting-append'() {
+    return this.trustingGuardedAppend;
+  }
+
+  get 'cautious-append'() {
+    return this.cautiousGuardedAppend;
+  }
+
   getAppend(trusting: boolean) {
     return trusting ? this.trustingGuardedAppend : this.cautiousGuardedAppend;
   }
@@ -17,18 +24,13 @@ export class StdLib {
 
 export default function builder<Locator>(
   compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>
+  meta: ContainingMetadata<Locator>,
+  size: number
 ): OpcodeBuilder<Locator> {
   return {
     resolver: compiler.resolver,
     compiler,
-    encoder: new EncoderImpl(
-      new InstructionEncoder([]),
-      compiler.constants,
-      compiler.stdLib,
-      compiler.isEager
-    ),
+    encoder: new EncoderImpl(compiler.constants, compiler.isEager, size),
     meta,
-    stdLib: compiler.stdLib,
   };
 }

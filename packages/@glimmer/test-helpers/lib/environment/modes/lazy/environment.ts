@@ -5,6 +5,7 @@ import {
   CompilableProgram,
   ComponentCapabilities,
   AnnotatedModuleLocator,
+  CompileTimeConstants,
 } from '@glimmer/interfaces';
 import {
   Helper as GlimmerHelper,
@@ -32,11 +33,17 @@ import {
   PartialDefinition,
   CompilerImpl,
   OpcodeBuilderCompiler,
+  compileStd,
 } from '@glimmer/opcode-compiler';
 import { precompile } from '@glimmer/compiler';
-import { Program, LazyConstants } from '@glimmer/program';
+import {
+  LazyConstants,
+  RuntimeConstants,
+  BothProgram,
+  CompileTimeHeapImpl,
+} from '@glimmer/program';
 import { TestDynamicScope } from '../../../environment';
-import TestEnvironment from '../../environment';
+import TestEnvironment, { TestProgram } from '../../environment';
 import { ComponentKind } from '../../../render-test';
 
 import LazyCompileTimeLookup from './lookup';
@@ -103,9 +110,18 @@ export type TestCompilationOptions = CompilationOptions<
   LazyRuntimeResolver
 >;
 
+function testProgram(
+  constants: RuntimeConstants<TestMeta> & CompileTimeConstants
+): BothProgram<TestMeta> {
+  let heap = new CompileTimeHeapImpl();
+  let stdlib = compileStd(constants, heap);
+
+  return new BothProgram(stdlib, constants, heap);
+}
+
 export default class LazyTestEnvironment extends TestEnvironment<TestMeta> {
   public resolver = new LazyRuntimeResolver();
-  readonly program: Program<TestMeta>;
+  readonly program: TestProgram;
 
   public compiler: OpcodeBuilderCompiler<TestMeta>;
 
@@ -113,16 +129,16 @@ export default class LazyTestEnvironment extends TestEnvironment<TestMeta> {
     super(testOptions(options));
 
     let constants = new LazyConstants(this.resolver);
-    let program = new Program(constants);
+    let p = testProgram(constants);
 
     this.compiler = new CompilerImpl(
       new TestMacros(),
-      program,
+      p,
       new LazyCompileTimeLookup(this.resolver),
       'lazy'
     );
 
-    this.program = program;
+    this.program = p;
 
     // recursive field, so "unsafely" set one half late (but before the resolver is actually used)
     this.resolver['compiler'] = this.compiler;

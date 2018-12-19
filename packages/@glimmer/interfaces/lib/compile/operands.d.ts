@@ -51,6 +51,11 @@ export interface OtherOperand {
   value: unknown;
 }
 
+export interface StdlibOperand {
+  type: 'stdlib';
+  value: 'main' | 'trusting-append' | 'cautious-append';
+}
+
 export type NonlabelBuilderOperand =
   | OptionStringOperand
   | StringOperand
@@ -62,6 +67,7 @@ export type NonlabelBuilderOperand =
   | LabelOperand
   | SerializableOperand
   | OtherOperand
+  | StdlibOperand
   | number;
 
 export type BuilderOperand = NonlabelBuilderOperand | LabelOperand;
@@ -83,6 +89,6 @@ export type BuilderOperands = MachineBuilderOperandsTuple & MachineBuilderOperan
 
 export type BuilderHandleThunk = (() => number);
 
-export type Operand = number | BuilderHandleThunk;
+export type Operand = number | BuilderHandleThunk | StdlibOperand;
 
 export type Operands = [] | [Operand] | [Operand, Operand] | [Operand, Operand, Operand];

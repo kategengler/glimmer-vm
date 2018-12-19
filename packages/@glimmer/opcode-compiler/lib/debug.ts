@@ -1,10 +1,4 @@
-import {
-  CompileTimeProgram,
-  CompileTimeConstants,
-  Option,
-  Opaque,
-  Recast,
-} from '@glimmer/interfaces';
+import { CompileTimeConstants, Option, Opaque, Recast } from '@glimmer/interfaces';
 import {
   opcodeMetadata,
   Op,
@@ -22,7 +16,7 @@ import {
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { unreachable, dict } from '@glimmer/util';
 import { Primitive } from '@glimmer/debug';
-import { PrimitiveType } from '@glimmer/program';
+import { PrimitiveType, RuntimeProgram } from '@glimmer/program';
 
 export interface DebugConstants {
   getNumber(value: number): number;
@@ -37,7 +31,7 @@ interface LazyDebugConstants {
   getOther<T>(s: number): T;
 }
 
-export function debugSlice(program: CompileTimeProgram, start: number, end: number) {
+export function debugSlice(program: RuntimeProgram<unknown>, start: number, end: number) {
   if (DEBUG) {
     /* tslint:disable:no-console */
     let { constants } = program;
@@ -125,6 +119,7 @@ export function debug(
       case 'to':
         out[operand.name] = pos + op;
         break;
+      case 'u32':
       case 'i32':
       case 'symbol':
       case 'block':
@@ -158,8 +153,18 @@ export function debug(
         out[operand.name] = c.getSerializable(op);
         break;
       case 'lazy-constant':
+      case 'unknown':
         out[operand.name] = (c as Recast<DebugConstants, LazyDebugConstants>).getOther(op);
         break;
+      case 'symbol-table':
+      case 'table':
+        out[operand.name] = c.getSerializable(op);
+        break;
+      case 'scope':
+        out[operand.name] = `<scope ${op}>`;
+        break;
+      default:
+        throw new Error(`Unexpected operand type ${operand.type} for debug output`);
     }
   });
 

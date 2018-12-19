@@ -12,7 +12,8 @@ function parse(file) {
 
 let parsed = parse('./packages/@glimmer/vm/lib/opcodes.toml');
 
-let enums = buildEnum('MachineOp', parsed.machine) + '\n\n' + buildEnum('Op', parsed.syscall);
+let enums =
+  buildEnum('MachineOp', parsed.machine, 0, 15) + '\n\n' + buildEnum('Op', parsed.syscall, 16);
 
 write('./packages/@glimmer/vm/lib/opcodes.ts', enums);
 

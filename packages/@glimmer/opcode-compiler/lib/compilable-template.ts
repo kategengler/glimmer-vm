@@ -6,6 +6,7 @@ import {
   LayoutWithContext,
   BlockSymbolTable,
   ContainingMetadata,
+  STDLib,
 } from '@glimmer/interfaces';
 import { PLACEHOLDER_HANDLE } from './interfaces';
 import { SerializedInlineBlock } from '@glimmer/wire-format';
@@ -32,7 +33,10 @@ export class CompilableProgram<Locator> implements ICompilableProgram {
 
     let { layout } = this;
 
-    return (this.compiled = compile(layout.block.statements, this.compiler, meta(layout)));
+    let compiled = (this.compiled = compile(layout.block.statements, this.compiler, meta(layout)));
+    this.compiler.patchStdlibs();
+
+    return compiled;
   }
 }
 
@@ -58,6 +62,16 @@ export class CompilableBlockImpl<Locator> implements CompilableTemplate<BlockSym
     // be known synchronously and must be linked lazily.
     this.compiled = PLACEHOLDER_HANDLE;
 
-    return (this.compiled = compile(this.block.statements, this.compiler, this.meta));
+    let compiled = (this.compiled = compile(this.block.statements, this.compiler, this.meta));
+
+    this.compiler.patchStdlibs();
+
+    return compiled;
+  }
+
+  compileOuter(stdlib: STDLib): number {
+    let handle = this.compile();
+    this.compiler.heap.patchStdlibs(stdlib);
+    return handle;
   }
 }

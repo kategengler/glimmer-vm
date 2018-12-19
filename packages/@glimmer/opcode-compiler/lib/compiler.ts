@@ -1,27 +1,22 @@
 import { Macros } from './syntax';
 import { debugSlice } from './debug';
 import {
-  Option,
-  STDLib,
   CompileTimeConstants,
   CompileTimeProgram,
   CompilerBuffer,
-  MaybeResolvedLayout,
   NamedBlocks as INamedBlocks,
   ContainingMetadata,
   CompileTimeLookup,
   CompilerArtifacts,
+  CompileTimeHeap,
+  STDLib,
 } from '@glimmer/interfaces';
 import { Statements, Core, Expression } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from './opcode-builder/interfaces';
-import { resolveLayoutForHandle } from './resolver';
-import { compileStd } from './opcode-builder/helpers/stdlib';
 
 export class CompilerImpl<Locator, Program extends CompileTimeProgram = CompileTimeProgram>
   implements OpcodeBuilderCompiler<Locator> {
-  stdLib!: STDLib; // Set by this.initialize() in constructor
-
   readonly isEager: boolean;
 
   constructor(
@@ -31,19 +26,26 @@ export class CompilerImpl<Locator, Program extends CompileTimeProgram = CompileT
     readonly kind: 'eager' | 'lazy'
   ) {
     this.isEager = kind === 'eager';
-    this.initialize();
   }
 
-  initialize() {
-    this.stdLib = compileStd(this);
+  get heap(): CompileTimeHeap {
+    return this.program.heap;
   }
 
   get constants(): CompileTimeConstants {
     return this.program.constants;
   }
 
+  get stdlib(): STDLib {
+    return this.program.stdlib;
+  }
+
   artifacts(): CompilerArtifacts {
-    return { heap: this.program.heap, constants: this.constants };
+    return {
+      stdlib: this.program.stdlib,
+      heap: this.program.heap,
+      constants: this.constants,
+    };
   }
 
   compileInline(
@@ -72,40 +74,32 @@ export class CompilerImpl<Locator, Program extends CompileTimeProgram = CompileT
   commit(scopeSize: number, buffer: CompilerBuffer): number {
     let heap = this.program.heap;
 
-    let handle = heap.malloc();
+    return commit(heap, scopeSize, buffer);
+  }
 
-    for (let i = 0; i < buffer.length; i++) {
-      let value = buffer[i];
+  patchStdlibs(): void {
+    this.heap.patchStdlibs(this.stdlib);
+  }
+}
 
-      if (typeof value === 'function') {
-        heap.pushPlaceholder(value);
-      } else {
-        heap.push(value);
-      }
+export function commit(heap: CompileTimeHeap, scopeSize: number, buffer: CompilerBuffer): number {
+  let handle = heap.malloc();
+
+  for (let i = 0; i < buffer.length; i++) {
+    let value = buffer[i];
+
+    if (typeof value === 'function') {
+      heap.pushPlaceholder(value);
+    } else if (typeof value === 'object') {
+      heap.pushStdlib(value);
+    } else {
+      heap.push(value);
     }
-
-    heap.finishMalloc(handle, scopeSize);
-
-    return handle;
   }
 
-  resolveLayoutForTag(tag: string, referrer: Locator): MaybeResolvedLayout {
-    let { resolver } = this;
+  heap.finishMalloc(handle, scopeSize);
 
-    let handle = resolver.lookupComponentDefinition(tag, referrer);
-
-    if (handle === null) return { handle: null, capabilities: null, compilable: null };
-
-    return resolveLayoutForHandle(resolver, handle);
-  }
-
-  resolveModifier(name: string, referrer: Locator): Option<number> {
-    return this.resolver.lookupModifier(name, referrer);
-  }
-
-  resolveHelper(name: string, referrer: Locator): Option<number> {
-    return this.resolver.lookupHelper(name, referrer);
-  }
+  return handle;
 }
 
 export let debugCompiler: (compiler: OpcodeBuilderCompiler<unknown>, handle: number) => void;

@@ -19,7 +19,7 @@ import {
   BundleCompilationResult,
 } from '@glimmer/bundle-compiler';
 import { Opaque, assert, Dict, assign, expect, Option } from '@glimmer/util';
-import { WriteOnlyProgram, RuntimeProgram, Heap, RuntimeConstantsImpl } from '@glimmer/program';
+import { RuntimeProgram, RuntimeConstantsImpl, RuntimeHeapImpl } from '@glimmer/program';
 import { ProgramSymbolTable, ComponentCapabilities, ModuleLocator } from '@glimmer/interfaces';
 import { UpdatableReference } from '@glimmer/object-reference';
 
@@ -48,7 +48,7 @@ import { Modules } from './modules';
 import { TestDynamicScope } from '../../../environment';
 import { NodeEnv } from '../ssr/environment';
 import { TestComponentDefinitionState, locatorFor } from '../../component-definition';
-import { WrappedBuilder } from '@glimmer/opcode-compiler';
+import { WrappedBuilder, program } from '@glimmer/opcode-compiler';
 import {
   TestModifierDefinitionState,
   TestModifierConstructor,
@@ -232,8 +232,8 @@ export default class EagerRenderDelegate implements RenderDelegate {
     let macros = new TestMacros<Locator>();
     let delegate: EagerCompilerDelegate = new EagerCompilerDelegate(this.components, this.modules);
     this.constants = new DebugConstants();
-    let program = new WriteOnlyProgram(this.constants);
-    return new BundleCompiler<Locator>(delegate, { macros, program });
+    let p = program(this.constants);
+    return new BundleCompiler<Locator>(delegate, { macros, program: p });
   }
 
   private getRuntimeProgram({
@@ -242,7 +242,7 @@ export default class EagerRenderDelegate implements RenderDelegate {
     heap,
   }: BundleCompilationResult): RuntimeProgram<Locator> {
     let resolver = new EagerRuntimeResolver(table, this.modules, this.symbolTables);
-    let runtimeHeap = new Heap(heap);
+    let runtimeHeap = new RuntimeHeapImpl(heap);
     let runtimeProgram = new RuntimeProgram(new RuntimeConstantsImpl(resolver, pool), runtimeHeap);
     return runtimeProgram;
   }

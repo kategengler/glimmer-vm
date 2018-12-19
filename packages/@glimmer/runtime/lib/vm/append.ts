@@ -46,10 +46,10 @@ import { APPEND_OPCODES, UpdatingOpcode, DebugState } from '../opcodes';
 
 import { UNDEFINED_REFERENCE } from '../references';
 
-import { Heap, Opcode } from '@glimmer/program';
+import { Opcode } from '@glimmer/program';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { HEAP, INNER_VM, DESTRUCTOR_STACK, CONSTANTS, ARGS, REGISTERS, STACKS } from '../symbols';
-import { RichIteratorResult } from '@glimmer/interfaces';
+import { RichIteratorResult, RuntimeHeap } from '@glimmer/interfaces';
 import { Checker, check, CheckOpaque } from '@glimmer/debug';
 
 /**
@@ -129,7 +129,7 @@ export interface InternalVM {
 }
 
 export interface RuntimeProgram<Locator> extends Program {
-  heap: Heap;
+  heap: RuntimeHeap;
   constants: RuntimeConstants<Locator>;
 }
 
@@ -143,7 +143,7 @@ class Stacks {
 
 export default class VM<T> implements PublicVM, InternalVM {
   private readonly [STACKS] = new Stacks();
-  private readonly [HEAP]: Heap;
+  private readonly [HEAP]: RuntimeHeap;
   private readonly destructor: object;
   private readonly [DESTRUCTOR_STACK] = new Stack<object>();
   readonly [CONSTANTS]: RuntimeConstants<T>;

@@ -1,4 +1,4 @@
-import { CompileTimeConstants } from '../program';
+import { CompileTimeConstants, CompileTimeHeap } from '../program';
 import { Dict } from '../core';
 import { BuilderOperands, Operands, BuilderOperand } from './operands';
 import { Compiler, STDLib } from '../template';
@@ -20,9 +20,6 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
   isEager: boolean;
 
   readonly constants: CompileTimeConstants;
-  readonly pos: number;
-  readonly nextPos: number;
-  readonly stdlib: STDLib;
 
   /**
    * Finalize the current compilation unit, add a `(Return)`, and push the opcodes from
@@ -32,10 +29,7 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
    * @param compiler
    * @param size
    */
-  commit(
-    compiler: Compiler<unknown, unknown, InstructionEncoder, Op, MachineOp>,
-    size: number
-  ): number;
+  commit(heap: CompileTimeHeap): number;
 
   /**
    * Push a syscall into the program with up to three optional
@@ -83,6 +77,5 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
    */
   label(name: string): void;
 
-  target(at: number, target: string): void;
   operand(operand: BuilderOperand): number;
 }
