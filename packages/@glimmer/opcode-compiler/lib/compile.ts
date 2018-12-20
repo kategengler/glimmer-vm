@@ -3,15 +3,16 @@ import { debugCompiler } from './compiler';
 import { Statement } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
-import { ContainingMetadata } from '@glimmer/interfaces';
+import { ContainingMetadata, CompileTimeLookup } from '@glimmer/interfaces';
 import builder from './opcode-builder/builder';
 
 export function compile<Locator>(
   statements: Statement[],
   compiler: OpcodeBuilderCompiler<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   meta: ContainingMetadata<Locator>
 ): number {
-  let b = builder(compiler, meta, meta.size);
+  let b = builder(compiler, resolver, meta, meta.size);
 
   let sCompiler = statementCompiler();
 

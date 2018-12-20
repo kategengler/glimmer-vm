@@ -3,6 +3,7 @@ import {
   Option,
   ComponentCapabilities,
   CompileTimeLookup,
+  AnnotatedModuleLocator,
 } from '@glimmer/interfaces';
 import { assert } from '@glimmer/util';
 import { ComponentDefinition, WithStaticLayout } from '@glimmer/runtime';
@@ -35,10 +36,12 @@ export default class LazyCompileTimeLookup implements CompileTimeLookup<TestMeta
       return null;
     }
 
-    let invocation = (manager as WithStaticLayout<any, any, TestMeta, RuntimeResolver>).getLayout(
-      state,
-      this.resolver
-    );
+    let invocation = (manager as WithStaticLayout<
+      any,
+      any,
+      AnnotatedModuleLocator,
+      RuntimeResolver
+    >).getLayout(state, this.resolver);
 
     return {
       compile() {

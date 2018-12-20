@@ -6,6 +6,7 @@ import {
   NamedBlocks,
   CompilableBlock,
   LayoutWithContext,
+  CompileTimeLookup,
 } from '@glimmer/interfaces';
 import { pushYieldableBlock } from './blocks';
 import { ExprCompilerState, compileExpression } from '../../syntax';
@@ -92,14 +93,15 @@ export function expr<Locator>(
 
 export function blockForLayout<Locator>(
   layout: LayoutWithContext,
-  compiler: OpcodeBuilderCompiler<Locator>
+  compiler: OpcodeBuilderCompiler<Locator>,
+  resolver: CompileTimeLookup<Locator>
 ): CompilableBlock {
   let block = {
     statements: layout.block.statements,
     parameters: EMPTY_ARRAY,
   };
 
-  return new CompilableBlockImpl(compiler, block, meta(layout));
+  return new CompilableBlockImpl(compiler, resolver, block, meta(layout));
 }
 
 export function meta<Locator>(layout: LayoutWithContext<Locator>): ContainingMetadata<Locator> {

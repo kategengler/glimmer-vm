@@ -22,7 +22,6 @@ export class CompilerImpl<Locator, Program extends CompileTimeProgram = CompileT
   constructor(
     private macros: Macros<Locator>,
     protected program: Program,
-    readonly resolver: CompileTimeLookup<Locator>,
     readonly kind: 'eager' | 'lazy'
   ) {
     this.isEager = kind === 'eager';

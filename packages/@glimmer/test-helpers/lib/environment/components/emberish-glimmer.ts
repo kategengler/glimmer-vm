@@ -85,7 +85,7 @@ export class EmberishGlimmerComponentManager
     if (resolver instanceof LazyRuntimeResolver) {
       let compile = (source: string) => {
         let template = createTemplate<TestMeta>(source);
-        let layout = template.create(resolver.compiler).asLayout();
+        let layout = template.create(resolver.compiler, resolver.resolver).asLayout();
 
         return {
           handle: layout.compile(),

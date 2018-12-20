@@ -4,6 +4,7 @@ import {
   ProgramSymbolTable,
   ComponentCapabilities,
   ModuleLocator,
+  AnnotatedModuleLocator,
 } from '@glimmer/interfaces';
 import GlimmerObject from '@glimmer/object';
 import { Tag, combine, PathReference, TagWrapper, DirtyableTag } from '@glimmer/reference';
@@ -26,7 +27,7 @@ import { UpdatableReference } from '@glimmer/object-reference';
 import { Attrs, createTemplate, AttrsDiff } from '../shared';
 import LazyRuntimeResolver from '../modes/lazy/runtime-resolver';
 import EagerRuntimeResolver from '../modes/eager/runtime-resolver';
-import { TestComponentDefinitionState, Locator } from '../components';
+import { TestComponentDefinitionState } from '../components';
 import { TestMeta } from '../modes/lazy/environment';
 
 export class EmberishCurlyComponent extends GlimmerObject {
@@ -99,7 +100,7 @@ export interface EmberishCurlyComponentDefinitionState {
 export class EmberishCurlyComponentManager
   implements
     WithDynamicTagName<EmberishCurlyComponent>,
-    WithDynamicLayout<EmberishCurlyComponent, Locator, LazyRuntimeResolver> {
+    WithDynamicLayout<EmberishCurlyComponent, AnnotatedModuleLocator, LazyRuntimeResolver> {
   getCapabilities(state: TestComponentDefinitionState) {
     return state.capabilities;
   }
@@ -126,9 +127,9 @@ export class EmberishCurlyComponentManager
       throw new Error('BUG: missing dynamic layout');
     }
 
-    return resolver.compileTemplate(handle, layout.name, (source, options) => {
+    return resolver.compileTemplate(handle, layout.name, (source, compiler, resolver) => {
       let factory = createTemplate<TestMeta>(source);
-      let template = factory.create(options);
+      let template = factory.create(compiler, resolver);
       let builder = template.asWrappedLayout();
       return {
         handle: builder.compile(),

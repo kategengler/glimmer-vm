@@ -98,7 +98,7 @@ export default class BundleCompiler<Locator> {
   protected delegate: BundleCompilerDelegate<Locator>;
   protected macros: Macros<Locator>;
   protected plugins: ASTPluginBuilder[];
-  protected resolver!: BundleCompilerLookup<Locator>; // Set by compilerResolver()
+  public resolver!: BundleCompilerLookup<Locator>; // Set by compilerResolver()
 
   constructor(
     delegate: BundleCompilerDelegate<Locator>,
@@ -110,7 +110,7 @@ export default class BundleCompiler<Locator> {
     let p = options.program || program(new DebugConstants());
     this.plugins = options.plugins || [];
 
-    this.compiler = new CompilerImpl(macros, p, this.compilerResolver(), 'eager');
+    this.compiler = new CompilerImpl(macros, p, 'eager');
   }
 
   /**
@@ -122,7 +122,7 @@ export default class BundleCompiler<Locator> {
     let block = this.preprocess(templateSource);
     this.compiledBlocks.set(locator, block);
 
-    let template = new CompilableProgramInstance(this.compiler, {
+    let template = new CompilableProgramInstance(this.compiler, this.compilerResolver(), {
       block,
       referrer: locator.meta,
       asPartial: false,

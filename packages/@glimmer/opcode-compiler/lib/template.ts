@@ -1,4 +1,10 @@
-import { CompilableProgram, Template, Option, LayoutWithContext } from '@glimmer/interfaces';
+import {
+  CompilableProgram,
+  Template,
+  Option,
+  LayoutWithContext,
+  CompileTimeLookup,
+} from '@glimmer/interfaces';
 import { assign } from '@glimmer/util';
 import { SerializedTemplateBlock, SerializedTemplateWithLazyBlock } from '@glimmer/wire-format';
 import { CompilableProgram as CompilableProgramInstance } from './compilable-template';
@@ -23,7 +29,10 @@ export interface TemplateFactory<Locator> {
    *
    * @param {Environment} env glimmer Environment
    */
-  create(env: OpcodeBuilderCompiler<Locator>): Template<Locator>;
+  create(
+    compiler: OpcodeBuilderCompiler<Locator>,
+    resolver: CompileTimeLookup<Locator>
+  ): Template<Locator>;
   /**
    * Used to create an environment specific singleton instance
    * of the template.
@@ -31,7 +40,11 @@ export interface TemplateFactory<Locator> {
    * @param {Environment} env glimmer Environment
    * @param {Object} meta environment specific injections into meta
    */
-  create<U>(env: OpcodeBuilderCompiler<Locator>, meta: U): Template<Locator & U>;
+  create<U>(
+    compiler: OpcodeBuilderCompiler<Locator>,
+    resolver: CompileTimeLookup<Locator>,
+    meta: U
+  ): Template<Locator & U>;
 }
 
 let clientId = 0;
@@ -54,12 +67,16 @@ export default function templateFactory<Locator>({
 }: SerializedTemplateWithLazyBlock<Locator>): TemplateFactory<Locator> {
   let parsedBlock: SerializedTemplateBlock;
   let id = templateId || `client-${clientId++}`;
-  let create = (compiler: OpcodeBuilderCompiler<Locator>, envMeta?: {}) => {
+  let create = (
+    compiler: OpcodeBuilderCompiler<Locator>,
+    resolver: CompileTimeLookup<Locator>,
+    envMeta?: {}
+  ) => {
     let newMeta = envMeta ? assign({}, envMeta, meta) : meta;
     if (!parsedBlock) {
       parsedBlock = JSON.parse(block);
     }
-    return new TemplateImpl(compiler, { id, block: parsedBlock, referrer: newMeta });
+    return new TemplateImpl(compiler, resolver, { id, block: parsedBlock, referrer: newMeta });
   };
   return { id, meta, create };
 }
@@ -75,6 +92,7 @@ class TemplateImpl<Locator> implements Template<Locator> {
 
   constructor(
     private compiler: OpcodeBuilderCompiler<Locator>,
+    private resolver: CompileTimeLookup<Locator>,
     private parsedLayout: Pick<LayoutWithContext<Locator>, 'id' | 'block' | 'referrer'>
   ) {
     let { block } = parsedLayout;
@@ -86,7 +104,7 @@ class TemplateImpl<Locator> implements Template<Locator> {
 
   asLayout(): CompilableProgram {
     if (this.layout) return this.layout;
-    return (this.layout = new CompilableProgramInstance(this.compiler, {
+    return (this.layout = new CompilableProgramInstance(this.compiler, this.resolver, {
       ...this.parsedLayout,
       asPartial: false,
     }));
@@ -94,7 +112,7 @@ class TemplateImpl<Locator> implements Template<Locator> {
 
   asPartial(): CompilableProgram {
     if (this.partial) return this.partial;
-    return (this.layout = new CompilableProgramInstance(this.compiler, {
+    return (this.layout = new CompilableProgramInstance(this.compiler, this.resolver, {
       ...this.parsedLayout,
       asPartial: true,
     }));
@@ -102,7 +120,7 @@ class TemplateImpl<Locator> implements Template<Locator> {
 
   asWrappedLayout(): CompilableProgram {
     if (this.wrappedLayout) return this.wrappedLayout;
-    return (this.wrappedLayout = new WrappedBuilder(this.compiler, {
+    return (this.wrappedLayout = new WrappedBuilder(this.compiler, this.resolver, {
       ...this.parsedLayout,
       asPartial: false,
     }));

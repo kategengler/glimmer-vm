@@ -6,6 +6,7 @@ import {
   LayoutWithContext,
   BlockSymbolTable,
   ContainingMetadata,
+  CompileTimeLookup,
 } from '@glimmer/interfaces';
 import { PLACEHOLDER_HANDLE } from './interfaces';
 import { SerializedInlineBlock } from '@glimmer/wire-format';
@@ -18,6 +19,7 @@ export class CompilableProgram<Locator> implements ICompilableProgram {
 
   constructor(
     protected compiler: OpcodeBuilderCompiler<Locator>,
+    protected resolver: CompileTimeLookup<Locator>,
     protected layout: LayoutWithContext<Locator>
   ) {}
 
@@ -32,7 +34,12 @@ export class CompilableProgram<Locator> implements ICompilableProgram {
 
     let { layout } = this;
 
-    let compiled = (this.compiled = compile(layout.block.statements, this.compiler, meta(layout)));
+    let compiled = (this.compiled = compile(
+      layout.block.statements,
+      this.compiler,
+      this.resolver,
+      meta(layout)
+    ));
     this.compiler.patchStdlibs();
 
     return compiled;
@@ -44,6 +51,7 @@ export class CompilableBlockImpl<Locator> implements CompilableTemplate<BlockSym
 
   constructor(
     private compiler: OpcodeBuilderCompiler<Locator>,
+    private resolver: CompileTimeLookup<Locator>,
     private block: SerializedInlineBlock,
     private meta: ContainingMetadata<Locator>
   ) {}
@@ -61,7 +69,12 @@ export class CompilableBlockImpl<Locator> implements CompilableTemplate<BlockSym
     // be known synchronously and must be linked lazily.
     this.compiled = PLACEHOLDER_HANDLE;
 
-    let compiled = (this.compiled = compile(this.block.statements, this.compiler, this.meta));
+    let compiled = (this.compiled = compile(
+      this.block.statements,
+      this.compiler,
+      this.resolver,
+      this.meta
+    ));
 
     this.compiler.patchStdlibs();
 

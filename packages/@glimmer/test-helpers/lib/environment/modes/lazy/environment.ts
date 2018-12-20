@@ -46,7 +46,6 @@ import { TestDynamicScope } from '../../../environment';
 import TestEnvironment, { TestProgram } from '../../environment';
 import { ComponentKind } from '../../../render-test';
 
-import LazyCompileTimeLookup from './lookup';
 import LazyRuntimeResolver from './runtime-resolver';
 
 import {
@@ -79,6 +78,7 @@ import TestMacros from '../../macros';
 import { Opaque } from '@glimmer/util';
 import { PathReference } from '@glimmer/reference';
 import { TemplateMeta } from '@glimmer/wire-format';
+import LazyCompileTimeLookup from './lookup';
 
 const BASIC_COMPONENT_MANAGER = new BasicComponentManager();
 const EMBERISH_CURLY_COMPONENT_MANAGER = new EmberishCurlyComponentManager();
@@ -119,7 +119,7 @@ function testProgram(
   return new BothProgram(stdlib, constants, heap);
 }
 
-export default class LazyTestEnvironment extends TestEnvironment<TestMeta> {
+export default class LazyTestEnvironment extends TestEnvironment<AnnotatedModuleLocator> {
   public resolver = new LazyRuntimeResolver();
   readonly program: TestProgram;
 
@@ -131,17 +131,13 @@ export default class LazyTestEnvironment extends TestEnvironment<TestMeta> {
     let constants = new LazyConstants(this.resolver);
     let p = testProgram(constants);
 
-    this.compiler = new CompilerImpl(
-      new TestMacros(),
-      p,
-      new LazyCompileTimeLookup(this.resolver),
-      'lazy'
-    );
+    this.compiler = new CompilerImpl(new TestMacros(), p, 'lazy');
 
     this.program = p;
 
     // recursive field, so "unsafely" set one half late (but before the resolver is actually used)
     this.resolver['compiler'] = this.compiler;
+    this.resolver['resolver'] = new LazyCompileTimeLookup(this.resolver);
     let manager = new InertModifierManager();
     let state = new InertModifierDefinitionState();
     this.registerHelper('if', ([cond, yes, no]) => (cond ? yes : no));
@@ -308,7 +304,7 @@ export default class LazyTestEnvironment extends TestEnvironment<TestMeta> {
   preprocess(template: string, meta?: TestMeta): Template<TestMeta> {
     let wrapper = JSON.parse(precompile(template));
     let factory = templateFactory<TestMeta>(wrapper);
-    return factory.create(this.compiler, meta || DEFAULT_TEST_META);
+    return factory.create(this.compiler, this.resolver.resolver, meta || DEFAULT_TEST_META);
   }
 
   private registerComponent(

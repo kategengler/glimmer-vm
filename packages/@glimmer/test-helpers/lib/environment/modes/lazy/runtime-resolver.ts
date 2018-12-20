@@ -1,4 +1,9 @@
-import { RuntimeResolver, ComponentDefinition } from '@glimmer/interfaces';
+import {
+  RuntimeResolver,
+  ComponentDefinition,
+  CompileTimeLookup,
+  AnnotatedModuleLocator,
+} from '@glimmer/interfaces';
 import { Option, Opaque } from '@glimmer/util';
 import { Invocation } from '@glimmer/runtime';
 
@@ -6,11 +11,12 @@ import { TestMeta } from './environment';
 import Registry, { TypedRegistry, Lookup, LookupType } from '../../registry';
 import { OpcodeBuilderCompiler } from '@glimmer/opcode-compiler';
 
-export default class LazyRuntimeResolver implements RuntimeResolver<TestMeta> {
+export default class LazyRuntimeResolver implements RuntimeResolver<AnnotatedModuleLocator> {
   private handleLookup: TypedRegistry<Opaque>[] = [];
   private registry = new Registry();
 
   public compiler!: OpcodeBuilderCompiler<TestMeta>;
+  public resolver!: CompileTimeLookup<TestMeta>;
 
   register<K extends LookupType>(type: K, name: string, value: Lookup[K]): number {
     let registry = this.registry[type];
@@ -31,7 +37,11 @@ export default class LazyRuntimeResolver implements RuntimeResolver<TestMeta> {
   compileTemplate(
     sourceHandle: number,
     templateName: string,
-    create: (source: string, options: OpcodeBuilderCompiler<TestMeta>) => Invocation
+    create: (
+      source: string,
+      compiler: OpcodeBuilderCompiler<TestMeta>,
+      resolver: CompileTimeLookup<TestMeta>
+    ) => Invocation
   ): Invocation {
     let invocationHandle = this.lookup('template', templateName);
 
@@ -41,7 +51,7 @@ export default class LazyRuntimeResolver implements RuntimeResolver<TestMeta> {
 
     let source = this.resolve<string>(sourceHandle);
 
-    let invocation = create(source, this.compiler);
+    let invocation = create(source, this.compiler, this.resolver);
     this.register('template', templateName, invocation);
     return invocation;
   }
@@ -54,7 +64,10 @@ export default class LazyRuntimeResolver implements RuntimeResolver<TestMeta> {
     return this.lookup('modifier', name, referrer);
   }
 
-  lookupComponentDefinition(name: string, referrer?: {}): Option<ComponentDefinition> {
+  lookupComponentDefinition(
+    name: string,
+    referrer: AnnotatedModuleLocator
+  ): Option<ComponentDefinition> {
     let handle = this.lookupComponentHandle(name, referrer);
     if (handle === null) return null;
     return this.resolve(handle) as ComponentDefinition;

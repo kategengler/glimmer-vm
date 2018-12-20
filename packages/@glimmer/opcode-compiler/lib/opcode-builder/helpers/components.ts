@@ -272,7 +272,7 @@ export function wrappedComponent<Locator>(
 
     encoder.label('BODY');
 
-    invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler));
+    invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler, resolver));
 
     encoder.push(Op.Fetch, $s1);
     encoder.push(Op.JumpUnless, label('END'));

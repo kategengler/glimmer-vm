@@ -142,19 +142,21 @@ export function pushSymbolTable(encoder: OpcodeBuilderEncoder, table: Option<Sym
 export function inlineBlock<Locator>(
   block: WireFormat.SerializedInlineBlock,
   compiler: OpcodeBuilderCompiler<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   meta: ContainingMetadata<Locator>
 ): CompilableBlockImpl<Locator> {
-  return new CompilableBlockImpl(compiler, block, meta);
+  return new CompilableBlockImpl(compiler, resolver, block, meta);
 }
 
 export function templates<Locator>(
   blocks: WireFormat.Core.Blocks,
   compiler: OpcodeBuilderCompiler<Locator>,
+  resolver: CompileTimeLookup<Locator>,
   meta: ContainingMetadata<Locator>
 ): NamedBlocks {
   return NamedBlocksImpl.fromWireFormat(blocks, block => {
     if (!block) return null;
 
-    return inlineBlock(block, compiler, meta);
+    return inlineBlock(block, compiler, resolver, meta);
   });
 }

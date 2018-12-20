@@ -133,7 +133,6 @@ export interface Compiler<
   Op extends number,
   MachineOp extends number
 > {
-  readonly resolver: CompileTimeLookup<Locator>;
   readonly heap: CompileTimeHeap;
   readonly constants: CompileTimeConstants;
   readonly isEager: boolean;

@@ -302,6 +302,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
         attrsBlock = inlineBlock(
           { statements: wrappedAttrs, parameters: EMPTY_ARRAY },
           compiler,
+          resolver,
           meta
         );
       }
@@ -312,7 +313,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
         params: null,
         hash: args,
         synthetic: false,
-        blocks: templates(blocks, compiler, meta),
+        blocks: templates(blocks, compiler, resolver, meta),
       });
     }
   );
@@ -329,7 +330,12 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
     if (layoutHandle !== null && capabilities !== null) {
       let attrs: WireFormat.Statement[] = [..._attrs];
-      let attrsBlock = inlineBlock({ statements: attrs, parameters: EMPTY_ARRAY }, compiler, meta);
+      let attrsBlock = inlineBlock(
+        { statements: attrs, parameters: EMPTY_ARRAY },
+        compiler,
+        resolver,
+        meta
+      );
 
       if (compilable) {
         encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
@@ -340,7 +346,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
           params: null,
           hash: args,
           synthetic: false,
-          blocks: templates(blocks, compiler, meta),
+          blocks: templates(blocks, compiler, resolver, meta),
         });
       } else {
         encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
@@ -350,7 +356,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
           params: null,
           hash: args,
           synthetic: false,
-          blocks: templates(blocks, compiler, meta),
+          blocks: templates(blocks, compiler, resolver, meta),
         });
       }
     } else {
@@ -439,7 +445,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
       name,
       params,
       hash,
-      templates(named, compiler, meta),
+      templates(named, compiler, resolver, meta),
       encoder,
       resolver,
       compiler,

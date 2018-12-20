@@ -3,7 +3,12 @@ import { createTemplate } from '../shared';
 import { WithStaticLayout, Environment, Bounds, Invocation } from '@glimmer/runtime';
 import { unreachable, expect } from '@glimmer/util';
 import { PathReference, Tag, CONSTANT_TAG } from '@glimmer/reference';
-import { ComponentCapabilities, Opaque } from '@glimmer/interfaces';
+import {
+  ComponentCapabilities,
+  Opaque,
+  RuntimeResolver,
+  AnnotatedModuleLocator,
+} from '@glimmer/interfaces';
 import { UpdatableReference } from '@glimmer/object-reference';
 
 import LazyRuntimeResolver from '../modes/lazy/runtime-resolver';
@@ -51,14 +56,14 @@ export class BasicComponentManager
 
   getLayout(
     state: TestComponentDefinitionState,
-    resolver: EagerRuntimeResolver | LazyRuntimeResolver
+    resolver: RuntimeResolver<AnnotatedModuleLocator> & (EagerRuntimeResolver | LazyRuntimeResolver)
   ): Invocation {
     let { name } = state;
 
     if (resolver instanceof LazyRuntimeResolver) {
       let compile = (source: string) => {
         let template = createTemplate<TestMeta>(source);
-        let layout = template.create(resolver.compiler).asLayout();
+        let layout = template.create(resolver.compiler, resolver.resolver).asLayout();
         return {
           handle: layout.compile(),
           symbolTable: layout.symbolTable,
@@ -68,7 +73,7 @@ export class BasicComponentManager
       let handle = resolver.lookup('template-source', name)!;
 
       return resolver.compileTemplate(handle, name, compile);
-    } else {
+    } else if (resolver instanceof EagerRuntimeResolver) {
       // For the case of dynamically invoking (via `{{component}}`) in eager
       // mode, we need to exchange the module locator for the handle to the
       // compiled layout (which was provided at bundle compilation time and
@@ -78,6 +83,10 @@ export class BasicComponentManager
         'component definition state should include module locator'
       );
       return resolver.getInvocation({ locator });
+    } else {
+      throw new Error(
+        `Must pass EagerRuntimeResolver or LazyRuntimeResolver to BasicComponentManager's getLayout`
+      );
     }
   }
 
