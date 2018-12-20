@@ -152,13 +152,7 @@ export type Operand = number | (() => number);
 
 export type Operands = [] | [Operand] | [Operand, Operand] | [Operand, Operand, Operand];
 
-export type OpcodeBuilderCompiler<Locator> = Compiler<
-  OpcodeBuilder<Locator>,
-  Locator,
-  InstructionEncoder,
-  Op,
-  MachineOp
->;
+export type OpcodeBuilderCompiler<Locator> = Compiler<Locator, InstructionEncoder, Op, MachineOp>;
 
 export type OpcodeBuilderEncoder = Encoder<InstructionEncoder, Op, MachineOp>;
 

@@ -128,7 +128,6 @@ export interface CompilerArtifacts {
 }
 
 export interface Compiler<
-  Builder,
   Locator,
   InstructionEncoder,
   Op extends number,
@@ -156,7 +155,7 @@ export interface Compiler<
     blocks: NamedBlocks,
     encoder: Encoder<InstructionEncoder, Op, MachineOp>,
     resolver: CompileTimeLookup<Locator>,
-    compiler: Compiler<Builder, Locator, InstructionEncoder, Op, MachineOp>,
+    compiler: Compiler<Locator, InstructionEncoder, Op, MachineOp>,
     meta: ContainingMetadata<Locator>
   ): void;
 

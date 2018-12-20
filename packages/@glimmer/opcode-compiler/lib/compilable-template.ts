@@ -6,7 +6,6 @@ import {
   LayoutWithContext,
   BlockSymbolTable,
   ContainingMetadata,
-  STDLib,
 } from '@glimmer/interfaces';
 import { PLACEHOLDER_HANDLE } from './interfaces';
 import { SerializedInlineBlock } from '@glimmer/wire-format';
@@ -67,11 +66,5 @@ export class CompilableBlockImpl<Locator> implements CompilableTemplate<BlockSym
     this.compiler.patchStdlibs();
 
     return compiled;
-  }
-
-  compileOuter(stdlib: STDLib): number {
-    let handle = this.compile();
-    this.compiler.heap.patchStdlibs(stdlib);
-    return handle;
   }
 }
