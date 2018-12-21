@@ -12,18 +12,26 @@ function parse(file) {
 
 let parsed = parse('./packages/@glimmer/vm/lib/opcodes.toml');
 
+let machine = buildEnum('MachineOp', parsed.machine, 0, 15);
+let syscall = buildEnum('Op', parsed.syscall, 16);
+
 let enums =
   buildEnum('MachineOp', parsed.machine, 0, 15) + '\n\n' + buildEnum('Op', parsed.syscall, 16);
 
-write('./packages/@glimmer/vm/lib/opcodes.ts', enums);
-
-// console.log(buildEnum('MachineOp', parsed.machine));
-// console.log('');
-// console.log(buildEnum('Op', parsed.syscall));
+write(
+  './packages/@glimmer/vm/lib/opcodes.ts',
+  `import { Op, MachineOp } from '@glimmer/interfaces';\n\n` +
+    machine.predicate +
+    '\n\n' +
+    syscall.predicate
+);
+write(
+  './packages/@glimmer/interfaces/lib/vm-opcodes.d.ts',
+  machine.enumString + '\n\n' + syscall.enumString
+);
 
 let debugMetadata = `
-import { Op, MachineOp } from './opcodes';
-import { Option } from '@glimmer/interfaces';
+import { MachineOp, Op, Option } from '@glimmer/interfaces';
 import { fillNulls } from '@glimmer/util';
 import { NormalizedMetadata } from '@glimmer/debug';
 

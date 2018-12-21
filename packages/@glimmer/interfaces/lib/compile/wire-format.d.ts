@@ -36,7 +36,6 @@ export const enum SexpOpcodes {
   TrustingAttr = 19,
   TrustingComponentAttr = 20,
   Debugger = 21,
-  ClientSideStatement = 22,
 
   // Expressions
 
@@ -49,6 +48,58 @@ export const enum SexpOpcodes {
   Helper = 29,
   Concat = 30,
   ClientSideExpression = 31,
+
+  // Client Side
+  ClientOpenComponentElement = 32,
+  ClientDidCreateElement = 33,
+  ClientDidRenderLayout = 34,
+  ClientDebugger = 35,
+}
+
+export interface SexpOpcodeMap {
+  [index: number]: TupleSyntax;
+
+  [SexpOpcodes.Text]: Statements.Text;
+  [SexpOpcodes.Append]: Statements.Append;
+  [SexpOpcodes.Comment]: Statements.Comment;
+  [SexpOpcodes.Modifier]: Statements.Modifier;
+  [SexpOpcodes.Block]: Statements.Block;
+  [SexpOpcodes.Component]: Statements.Component;
+  [SexpOpcodes.DynamicComponent]: Statements.DynamicComponent;
+  [SexpOpcodes.OpenElement]: Statements.OpenElement;
+  [SexpOpcodes.OpenSplattedElement]: Statements.SplatElement;
+  [SexpOpcodes.FlushElement]: Statements.FlushElement;
+  [SexpOpcodes.CloseElement]: Statements.CloseElement;
+  [SexpOpcodes.StaticAttr]: Statements.StaticAttr;
+  [SexpOpcodes.DynamicAttr]: Statements.DynamicAttr;
+  [SexpOpcodes.ComponentAttr]: Statements.ComponentAttr;
+  [SexpOpcodes.AttrSplat]: Statements.AttrSplat;
+  [SexpOpcodes.Yield]: Statements.Yield;
+  [SexpOpcodes.Partial]: Statements.Partial;
+
+  [SexpOpcodes.DynamicArg]: Statements.DynamicArg;
+  [SexpOpcodes.StaticArg]: Statements.StaticArg;
+  [SexpOpcodes.TrustingAttr]: Statements.TrustingAttr;
+  [SexpOpcodes.TrustingComponentAttr]: Statements.TrustingComponentAttr;
+  [SexpOpcodes.Debugger]: Statements.Debugger;
+
+  // Expressions
+
+  [SexpOpcodes.Unknown]: Expressions.Unknown;
+  [SexpOpcodes.Get]: Expressions.Get;
+  [SexpOpcodes.MaybeLocal]: Expressions.MaybeLocal;
+  [SexpOpcodes.HasBlock]: Expressions.HasBlock;
+  [SexpOpcodes.HasBlockParams]: Expressions.HasBlockParams;
+  [SexpOpcodes.Undefined]: Expressions.Undefined;
+  [SexpOpcodes.Helper]: Expressions.Helper;
+  [SexpOpcodes.Concat]: Expressions.Concat;
+
+  // Client Side
+
+  [SexpOpcodes.ClientOpenComponentElement]: ClientOpenComponentElement;
+  [SexpOpcodes.ClientDidCreateElement]: ClientDidCreateElement;
+  [SexpOpcodes.ClientDidRenderLayout]: ClientDidRenderLayout;
+  [SexpOpcodes.ClientDebugger]: ClientDebugger;
 }
 
 export namespace Core {
@@ -147,9 +198,6 @@ export namespace Statements {
   export type TrustingAttr = [SexpOpcodes.TrustingAttr, str, Expression, str];
   export type TrustingComponentAttr = [SexpOpcodes.TrustingComponentAttr, str, Expression, str];
   export type Debugger = [SexpOpcodes.Debugger, Core.EvalInfo];
-  export type ClientSide =
-    | [SexpOpcodes.ClientSideStatement, any]
-    | [SexpOpcodes.ClientSideStatement, any, any];
 
   /**
    * A Handlebars statement
@@ -176,8 +224,7 @@ export namespace Statements {
     | DynamicArg
     | TrustingAttr
     | TrustingComponentAttr
-    | Debugger
-    | ClientSide;
+    | Debugger;
 
   export type Attribute =
     | Statements.StaticAttr
@@ -190,6 +237,19 @@ export namespace Statements {
 
   export type Parameter = Attribute | Argument;
 }
+
+import { TupleSyntax } from '@glimmer/opcode-compiler/lib/syntax';
+
+export type ClientOpenComponentElement = [SexpOpcodes.ClientOpenComponentElement, string];
+export type ClientDidCreateElement = [SexpOpcodes.ClientDidCreateElement];
+export type ClientDidRenderLayout = [SexpOpcodes.ClientDidRenderLayout];
+export type ClientDebugger = [SexpOpcodes.Debugger];
+
+export type ClientSideStatement =
+  | ClientOpenComponentElement
+  | ClientDidCreateElement
+  | ClientDidRenderLayout
+  | ClientDebugger;
 
 /** A Handlebars statement */
 export type Statement = Statements.Statement;
