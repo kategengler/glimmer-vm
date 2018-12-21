@@ -10,6 +10,7 @@ import {
   BuilderOps,
   BuilderOp,
   SexpOpcodeMap,
+  HighLevelBuilderOp,
 } from '@glimmer/interfaces';
 import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
 import { $fp, $s0, $sp } from '@glimmer/vm';
@@ -24,6 +25,7 @@ import OpcodeBuilder, {
   optionStr,
   bool,
   label,
+  expression,
 } from './opcode-builder/interfaces';
 
 import { WireFormat } from '@glimmer/interfaces';
@@ -46,7 +48,6 @@ import {
   frame,
   helper,
   list,
-  startDebugger,
   dynamicScope,
 } from './opcode-builder/helpers/vm';
 import {
@@ -268,9 +269,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     return op(Op.Text, str(sexp[1]));
   });
 
-  STATEMENTS.addLeaf(SexpOpcodes.Comment, (sexp: S.Comment) => {
-    return op(Op.Comment, str(sexp[1]));
-  });
+  STATEMENTS.addLeaf(SexpOpcodes.Comment, (sexp: S.Comment) => op(Op.Comment, str(sexp[1])));
 
   STATEMENTS.addLeaf(SexpOpcodes.CloseElement, () => op(Op.CloseElement));
 
@@ -291,33 +290,21 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   });
 
-  STATEMENTS.addLeaf(SexpOpcodes.StaticAttr, (sexp: S.StaticAttr, encoder) => {
-    let [, name, value, namespace] = sexp;
-    staticAttr(encoder, name, namespace, value as string);
-  });
+  STATEMENTS.addLeaf(SexpOpcodes.StaticAttr, ([, name, value, namespace]) =>
+    staticAttr(name, namespace, value as string)
+  );
 
-  STATEMENTS.addSimple(SexpOpcodes.DynamicAttr, (sexp, state) => {
-    dynamicAttr(state, sexp, false);
-  });
-
-  STATEMENTS.addSimple(SexpOpcodes.ComponentAttr, (sexp, state) => {
-    componentAttr(state, sexp, false);
-  });
-
-  STATEMENTS.addSimple(SexpOpcodes.TrustingAttr, (sexp, state) => {
-    dynamicAttr(state, sexp, true);
-  });
-
-  STATEMENTS.addSimple(SexpOpcodes.TrustingComponentAttr, (sexp, state) => {
-    componentAttr(state, sexp, true);
-  });
+  STATEMENTS.addSimple(SexpOpcodes.DynamicAttr, sexp => dynamicAttr(sexp, false));
+  STATEMENTS.addSimple(SexpOpcodes.ComponentAttr, sexp => componentAttr(sexp, false));
+  STATEMENTS.addSimple(SexpOpcodes.TrustingAttr, sexp => dynamicAttr(sexp, true));
+  STATEMENTS.addSimple(SexpOpcodes.TrustingComponentAttr, sexp => componentAttr(sexp, true));
 
   STATEMENTS.addLeaf(SexpOpcodes.OpenElement, sexp => op(Op.OpenElement, str(sexp[1])));
 
-  STATEMENTS.addLeaf(SexpOpcodes.OpenSplattedElement, (sexp, encoder) => {
-    encoder.push(Op.PutComponentOperations);
-    encoder.push(Op.OpenElement, str(sexp[1]));
-  });
+  STATEMENTS.addLeaf(SexpOpcodes.OpenSplattedElement, sexp => [
+    op(Op.PutComponentOperations),
+    op(Op.OpenElement, str(sexp[1])),
+  ]);
 
   STATEMENTS.addStatement(
     SexpOpcodes.DynamicComponent,
@@ -422,21 +409,18 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   STATEMENTS.addStatement(SexpOpcodes.Yield, (sexp, encoder) => {
     let [, to, params] = sexp;
 
-    encoder.concat(yieldBlock(to, params, encoder.isEager));
+    return yieldBlock(to, params, encoder.isEager);
   });
 
   STATEMENTS.addStatement(SexpOpcodes.AttrSplat, (sexp, encoder) => {
     let [, to] = sexp;
 
-    encoder.concat(yieldBlock(to, EMPTY_ARRAY, encoder.isEager));
-    // encoder.isComponentAttrs = false;
+    return yieldBlock(to, EMPTY_ARRAY, encoder.isEager);
   });
 
-  STATEMENTS.addLeaf(SexpOpcodes.Debugger, (sexp, encoder, meta) => {
-    let [, evalInfo] = sexp;
-
-    startDebugger(encoder, meta.evalSymbols!, evalInfo);
-  });
+  STATEMENTS.addLeaf(SexpOpcodes.Debugger, ([, evalInfo], _encoder, meta) =>
+    op(Op.Debugger, strArray(meta.evalSymbols!), arr(evalInfo))
+  );
 
   STATEMENTS.addStatement(SexpOpcodes.Append, (sexp, encoder, resolver, compiler, meta) => {
     let [, value, trusting] = sexp;
@@ -463,10 +447,10 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     );
   });
 
-  STATEMENTS.addLeaf(SexpOpcodes.ClientOpenComponentElement, (sexp, encoder) => {
-    encoder.push(Op.PutComponentOperations);
-    encoder.push(Op.OpenElement, str(sexp[1]));
-  });
+  STATEMENTS.addLeaf(SexpOpcodes.ClientOpenComponentElement, ([, tag]) => [
+    op(Op.PutComponentOperations),
+    op(Op.OpenElement, str(tag)),
+  ]);
 
   STATEMENTS.addLeaf(SexpOpcodes.ClientDidCreateElement, (_sexp, encoder) => {
     encoder.push(Op.DidCreateElement, $s0);
@@ -484,45 +468,37 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   return STATEMENTS;
 }
 
-function dynamicAttr<Locator>(
-  state: ExprCompilerState<Locator>,
-  sexp: S.DynamicAttr | S.TrustingAttr,
-  trusting: boolean
-) {
+function dynamicAttr(sexp: S.DynamicAttr | S.TrustingAttr, trusting: boolean): CompileAction {
   let [, name, value, namespace] = sexp;
 
-  expr(value, state);
+  return [
+    op(HighLevelBuilderOp.Expr, expression(value)),
+    op(Op.DynamicAttr, str(name), bool(trusting), optionStr(namespace)),
+  ];
+  // expr(value, state);
 
-  if (namespace) {
-    finishDynamicAttr(state.encoder, name, namespace, trusting);
-  } else {
-    finishDynamicAttr(state.encoder, name, null, trusting);
-  }
+  // if (namespace) {
+  //   finishDynamicAttr(name, namespace, trusting);
+  // } else {
+  //   finishDynamicAttr(name, null, trusting);
+  // }
 }
 
 export function finishDynamicAttr(
-  encoder: OpcodeBuilderEncoder,
   name: string,
   namespace: Option<string>,
   trusting: boolean
-) {
-  encoder.push(Op.DynamicAttr, str(name), bool(trusting), optionStr(namespace));
+): CompileAction {
+  return op(Op.DynamicAttr, str(name), bool(trusting), optionStr(namespace));
 }
 
-function componentAttr<Locator>(
-  state: ExprCompilerState<Locator>,
-  sexp: S.ComponentAttr | S.TrustingComponentAttr,
-  trusting: boolean
-) {
+function componentAttr(sexp: S.ComponentAttr | S.TrustingComponentAttr, trusting: boolean) {
   let [, name, value, namespace] = sexp;
 
-  expr(value, state);
-
-  if (namespace) {
-    finishComponentAttr(state.encoder, name, namespace, trusting);
-  } else {
-    finishComponentAttr(state.encoder, name, null, trusting);
-  }
+  return [
+    op(HighLevelBuilderOp.Expr, expression(value)),
+    op(Op.ComponentAttr, str(name), bool(trusting), optionStr(namespace)),
+  ];
 }
 
 export function finishComponentAttr(

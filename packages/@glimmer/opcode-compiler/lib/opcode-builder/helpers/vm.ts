@@ -1,15 +1,5 @@
 import { OpcodeSize } from '@glimmer/encoder';
-import {
-  OpcodeBuilderEncoder,
-  num,
-  bool,
-  str,
-  Block,
-  CompileHelper,
-  strArray,
-  arr,
-  label,
-} from '../interfaces';
+import { OpcodeBuilderEncoder, num, bool, str, Block, CompileHelper, label } from '../interfaces';
 import { PrimitiveType } from '@glimmer/program';
 import { SavedRegister, $v0 } from '@glimmer/vm';
 import { Primitive } from '../../interfaces';
@@ -134,12 +124,4 @@ export function dynamicScope(encoder: OpcodeBuilderEncoder, names: Option<string
   }
   block(encoder);
   encoder.push(Op.PopDynamicScope);
-}
-
-export function startDebugger(
-  encoder: OpcodeBuilderEncoder,
-  symbols: string[],
-  evalInfo: number[]
-) {
-  encoder.push(Op.Debugger, strArray(symbols), arr(evalInfo));
 }

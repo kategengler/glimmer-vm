@@ -25,6 +25,7 @@ import {
   ArgsOperand,
   OptionOperand,
   BuilderOps,
+  ExpressionOperand,
 } from '@glimmer/interfaces';
 
 import { InstructionEncoder } from '@glimmer/encoder';
@@ -156,6 +157,10 @@ export function args(options: ArgsOptions): ArgsOperand {
 
 export function option(list: Option<BuilderOps>): OptionOperand {
   return { type: 'option', value: list };
+}
+
+export function expression(expr: WireFormat.Expression): ExpressionOperand {
+  return { type: 'expr', value: expr };
 }
 
 export type Operand = number | (() => number);

@@ -3,17 +3,13 @@ import { Option, MachineOp, Op } from '@glimmer/interfaces';
 import { OpcodeBuilderEncoder, str, CompileHelper, Block } from '../interfaces';
 import { compileArgs } from './shared';
 import { EMPTY_BLOCKS } from '../../utils';
-import { ExprCompilerState } from '../../syntax';
+import { ExprCompilerState, CompileAction } from '../../syntax';
+import { op } from '../encoder';
 
-export function staticAttr(
-  encoder: OpcodeBuilderEncoder,
-  name: string,
-  _namespace: Option<string>,
-  value: string
-): void {
+export function staticAttr(name: string, _namespace: Option<string>, value: string): CompileAction {
   const namespace = _namespace ? str(_namespace) : 0;
 
-  encoder.push(Op.StaticAttr, str(name), str(value), namespace);
+  return op(Op.StaticAttr, str(name), str(value), namespace);
 }
 
 export function modifier<Locator>(
