@@ -1,5 +1,4 @@
-import { ComponentCapabilities, CompileTimeProgram, NamedBlocks } from '@glimmer/interfaces';
-import { Core } from '@glimmer/wire-format';
+import { ComponentCapabilities, CompileTimeProgram, NamedBlocks, Core } from '@glimmer/interfaces';
 import { Macros } from './syntax';
 
 export interface EagerResolver<Locator> {

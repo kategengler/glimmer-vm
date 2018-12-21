@@ -1,5 +1,4 @@
-import { Dict, Option } from '@glimmer/interfaces';
-import { SerializedTemplateWithLazyBlock } from '@glimmer/wire-format';
+import { Dict, Option, SerializedTemplateWithLazyBlock } from '@glimmer/interfaces';
 import { precompile, PrecompileOptions } from '@glimmer/compiler';
 import { templateFactory, TemplateFactory } from '@glimmer/opcode-compiler';
 

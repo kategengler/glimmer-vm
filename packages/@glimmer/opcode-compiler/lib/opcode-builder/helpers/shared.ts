@@ -1,4 +1,3 @@
-import * as WireFormat from '@glimmer/wire-format';
 import { OpcodeBuilderCompiler } from '../interfaces';
 import {
   ContainingMetadata,
@@ -7,6 +6,7 @@ import {
   CompilableBlock,
   LayoutWithContext,
   CompileTimeLookup,
+  WireFormat,
 } from '@glimmer/interfaces';
 import { pushYieldableBlock } from './blocks';
 import { ExprCompilerState, compileExpression } from '../../syntax';

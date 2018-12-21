@@ -1,11 +1,11 @@
 import { preprocess } from '@glimmer/syntax';
 import TemplateCompiler, { CompileOptions } from './template-compiler';
 import {
-  SerializedTemplateWithLazyBlock,
+  Option,
   TemplateJavascript,
+  SerializedTemplateWithLazyBlock,
   TemplateMeta,
-} from '@glimmer/wire-format';
-import { Option } from '@glimmer/interfaces';
+} from '@glimmer/interfaces';
 import { PreprocessOptions } from '@glimmer/syntax';
 
 export interface TemplateIdFn {

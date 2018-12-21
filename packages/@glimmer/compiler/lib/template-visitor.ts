@@ -1,6 +1,6 @@
 import { AST } from '@glimmer/syntax';
-import { Core } from '@glimmer/wire-format';
 import { Dict, Option, dict, unreachable, expect } from '@glimmer/util';
+import { Core } from '@glimmer/interfaces';
 
 export abstract class SymbolTable {
   static top(): ProgramSymbolTable {

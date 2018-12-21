@@ -1,7 +1,7 @@
 import { TestEnvironment, TestMeta, DEFAULT_TEST_META } from '@glimmer/test-helpers';
 import { templateFactory } from '@glimmer/opcode-compiler';
 import { precompile } from '@glimmer/compiler';
-import { SerializedTemplateWithLazyBlock } from '@glimmer/wire-format';
+import { SerializedTemplateWithLazyBlock } from '@glimmer/interfaces';
 
 let env: TestEnvironment;
 

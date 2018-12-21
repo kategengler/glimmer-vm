@@ -1,10 +1,10 @@
-import * as WireFormat from '@glimmer/wire-format';
 import {
   CompileTimeLookup,
   ContainingMetadata,
   Option,
   CompilableBlock,
   LayoutWithContext,
+  WireFormat,
 } from '@glimmer/interfaces';
 
 import {
@@ -46,7 +46,7 @@ export function staticComponentHelper<Locator>(
   hash: WireFormat.Core.Hash,
   template: Option<CompilableBlock>
 ): boolean {
-  let { handle, capabilities, compilable } = resolveLayoutForTag(resolver, tag, meta.referrer);
+  let { handle, capabilities, compilable } = resolveLayoutForTag(tag, resolver, meta.referrer);
 
   if (handle !== null && capabilities !== null) {
     if (compilable) {

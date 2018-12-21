@@ -1,9 +1,8 @@
 import { statementCompiler } from './syntax';
 import { debugCompiler } from './compiler';
-import { Statement } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
-import { ContainingMetadata, CompileTimeLookup } from '@glimmer/interfaces';
+import { ContainingMetadata, CompileTimeLookup, Statement } from '@glimmer/interfaces';
 import builder from './opcode-builder/builder';
 
 export function compile<Locator>(

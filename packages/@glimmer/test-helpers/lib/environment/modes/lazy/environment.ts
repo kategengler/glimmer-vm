@@ -6,6 +6,7 @@ import {
   ComponentCapabilities,
   AnnotatedModuleLocator,
   CompileTimeConstants,
+  TemplateMeta,
 } from '@glimmer/interfaces';
 import {
   Helper as GlimmerHelper,
@@ -77,7 +78,6 @@ import {
 import TestMacros from '../../macros';
 import { Opaque } from '@glimmer/util';
 import { PathReference } from '@glimmer/reference';
-import { TemplateMeta } from '@glimmer/wire-format';
 import LazyCompileTimeLookup from './lookup';
 
 const BASIC_COMPONENT_MANAGER = new BasicComponentManager();

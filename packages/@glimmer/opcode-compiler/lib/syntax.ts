@@ -4,10 +4,10 @@ import {
   NamedBlocks as INamedBlocks,
   CompileTimeLookup,
   ContainingMetadata,
+  SexpOpcodes,
 } from '@glimmer/interfaces';
 import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
 import { $fp, Op, $s0, MachineOp, $sp } from '@glimmer/vm';
-import * as WireFormat from '@glimmer/wire-format';
 import * as ClientSide from './client-side';
 import OpcodeBuilder, {
   str,
@@ -22,7 +22,8 @@ import OpcodeBuilder, {
   label,
 } from './opcode-builder/interfaces';
 
-import Ops = WireFormat.Ops;
+import { WireFormat } from '@glimmer/interfaces';
+
 import S = WireFormat.Statements;
 import E = WireFormat.Expressions;
 import C = WireFormat.Core;
@@ -120,9 +121,7 @@ export class ExpressionCompilers<Locator = unknown> {
     let func = this.funcs[index];
     assert(
       !!func,
-      `expected an implementation for ${
-        this.offset === 0 ? Ops[sexp![0]] : ClientSide.Ops[sexp![1]]
-      }`
+      `expected an implementation for ${this.offset === 0 ? sexp[0] : ClientSide.Ops[sexp![1]]}`
     );
 
     if (func.type === 'mini') {
@@ -168,9 +167,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     let func = this.funcs[index];
     assert(
       !!func,
-      `expected an implementation for ${
-        this.offset === 0 ? Ops[sexp![0]] : ClientSide.Ops[sexp![1]]
-      }`
+      `expected an implementation for ${this.offset === 0 ? sexp![0] : ClientSide.Ops[sexp![1]]}`
     );
 
     if (func.type === 'mini') {
@@ -188,7 +185,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     let func = this.funcs[index];
     assert(
       !!func,
-      `expected an implementation for ${this.offset === 0 ? Ops[sexp[0]] : ClientSide.Ops[sexp[1]]}`
+      `expected an implementation for ${this.offset === 0 ? sexp[0] : ClientSide.Ops[sexp[1]]}`
     );
 
     if (func.type === 'leaf') {
@@ -206,7 +203,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     let func = this.funcs[index];
     assert(
       !!func,
-      `expected an implementation for ${this.offset === 0 ? Ops[sexp[0]] : ClientSide.Ops[sexp[1]]}`
+      `expected an implementation for ${this.offset === 0 ? sexp[0] : ClientSide.Ops[sexp[1]]}`
     );
 
     if (func.type === 'leaf') {
@@ -228,23 +225,23 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
   const STATEMENTS = (_statementCompiler = new Compilers<WireFormat.Statement, unknown>());
 
-  STATEMENTS.addLeaf(Ops.Text, (sexp: S.Text, encoder) => {
+  STATEMENTS.addLeaf(SexpOpcodes.Text, (sexp: S.Text, encoder) => {
     encoder.push(Op.Text, { type: 'string', value: sexp[1] });
   });
 
-  STATEMENTS.addLeaf(Ops.Comment, (sexp: S.Comment, encoder) => {
+  STATEMENTS.addLeaf(SexpOpcodes.Comment, (sexp: S.Comment, encoder) => {
     encoder.push(Op.Comment, { type: 'string', value: sexp[1] });
   });
 
-  STATEMENTS.addLeaf(Ops.CloseElement, (_sexp, encoder) => {
+  STATEMENTS.addLeaf(SexpOpcodes.CloseElement, (_sexp, encoder) => {
     encoder.push(Op.CloseElement);
   });
 
-  STATEMENTS.addLeaf(Ops.FlushElement, (_sexp, encoder) => {
+  STATEMENTS.addLeaf(SexpOpcodes.FlushElement, (_sexp, encoder) => {
     encoder.push(Op.FlushElement);
   });
 
-  STATEMENTS.addSimple(Ops.Modifier, (sexp: S.Modifier, state) => {
+  STATEMENTS.addSimple(SexpOpcodes.Modifier, (sexp: S.Modifier, state) => {
     let { resolver, meta } = state;
     let [, name, params, hash] = sexp;
 
@@ -259,39 +256,38 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   });
 
-  STATEMENTS.addLeaf(Ops.StaticAttr, (sexp: S.StaticAttr, encoder) => {
+  STATEMENTS.addLeaf(SexpOpcodes.StaticAttr, (sexp: S.StaticAttr, encoder) => {
     let [, name, value, namespace] = sexp;
     staticAttr(encoder, name, namespace, value as string);
   });
 
-  STATEMENTS.addSimple(Ops.DynamicAttr, (sexp: S.DynamicAttr, state) => {
+  STATEMENTS.addSimple(SexpOpcodes.DynamicAttr, (sexp: S.DynamicAttr, state) => {
     dynamicAttr(state, sexp, false);
   });
 
-  STATEMENTS.addSimple(Ops.ComponentAttr, (sexp: S.DynamicAttr, state) => {
+  STATEMENTS.addSimple(SexpOpcodes.ComponentAttr, (sexp: S.DynamicAttr, state) => {
     componentAttr(state, sexp, false);
   });
 
-  STATEMENTS.addSimple(Ops.TrustingAttr, (sexp: S.DynamicAttr, state) => {
+  STATEMENTS.addSimple(SexpOpcodes.TrustingAttr, (sexp: S.DynamicAttr, state) => {
     dynamicAttr(state, sexp, true);
   });
 
-  STATEMENTS.addSimple(Ops.TrustingComponentAttr, (sexp: S.DynamicAttr, state) => {
+  STATEMENTS.addSimple(SexpOpcodes.TrustingComponentAttr, (sexp: S.DynamicAttr, state) => {
     componentAttr(state, sexp, true);
   });
 
-  STATEMENTS.addLeaf(Ops.OpenElement, (sexp: S.OpenElement, encoder) => {
+  STATEMENTS.addLeaf(SexpOpcodes.OpenElement, (sexp: S.OpenElement, encoder) => {
     encoder.push(Op.OpenElement, str(sexp[1]));
   });
 
-  STATEMENTS.addLeaf(Ops.OpenSplattedElement, (sexp: S.SplatElement, encoder) => {
-    // encoder.isComponentAttrs = true;
+  STATEMENTS.addLeaf(SexpOpcodes.OpenSplattedElement, (sexp: S.SplatElement, encoder) => {
     encoder.push(Op.PutComponentOperations);
     encoder.push(Op.OpenElement, str(sexp[1]));
   });
 
   STATEMENTS.addStatement(
-    Ops.DynamicComponent,
+    SexpOpcodes.DynamicComponent,
     (sexp: S.DynamicComponent, encoder, resolver, compiler, meta) => {
       let [, definition, attrs, args, blocks] = sexp;
 
@@ -318,53 +314,56 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   );
 
-  STATEMENTS.addStatement(Ops.Component, (sexp: S.Component, encoder, resolver, compiler, meta) => {
-    let [, tag, _attrs, args, blocks] = sexp;
-    let { referrer } = meta;
+  STATEMENTS.addStatement(
+    SexpOpcodes.Component,
+    (sexp: S.Component, encoder, resolver, compiler, meta) => {
+      let [, tag, _attrs, args, blocks] = sexp;
+      let { referrer } = meta;
 
-    let { handle: layoutHandle, capabilities, compilable } = resolveLayoutForTag(
-      resolver,
-      tag,
-      referrer
-    );
-
-    if (layoutHandle !== null && capabilities !== null) {
-      let attrs: WireFormat.Statement[] = [..._attrs];
-      let attrsBlock = inlineBlock(
-        { statements: attrs, parameters: EMPTY_ARRAY },
-        compiler,
+      let { handle: layoutHandle, capabilities, compilable } = resolveLayoutForTag(
+        tag,
         resolver,
-        meta
+        referrer
       );
 
-      if (compilable) {
-        encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
-        invokeStaticComponent(encoder, resolver, compiler, meta, {
-          capabilities,
-          layout: compilable,
-          attrs: attrsBlock,
-          params: null,
-          hash: args,
-          synthetic: false,
-          blocks: templates(blocks, compiler, resolver, meta),
-        });
-      } else {
-        encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
-        invokeComponent(encoder, resolver, compiler, meta, {
-          capabilities,
-          attrs: attrsBlock,
-          params: null,
-          hash: args,
-          synthetic: false,
-          blocks: templates(blocks, compiler, resolver, meta),
-        });
-      }
-    } else {
-      throw new Error(`Compile Error: Cannot find component ${tag}`);
-    }
-  });
+      if (layoutHandle !== null && capabilities !== null) {
+        let attrs: WireFormat.Statement[] = [..._attrs];
+        let attrsBlock = inlineBlock(
+          { statements: attrs, parameters: EMPTY_ARRAY },
+          compiler,
+          resolver,
+          meta
+        );
 
-  STATEMENTS.addSimple(Ops.Partial, (sexp: S.Partial, state) => {
+        if (compilable) {
+          encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
+          invokeStaticComponent(encoder, resolver, compiler, meta, {
+            capabilities,
+            layout: compilable,
+            attrs: attrsBlock,
+            params: null,
+            hash: args,
+            synthetic: false,
+            blocks: templates(blocks, compiler, resolver, meta),
+          });
+        } else {
+          encoder.push(Op.PushComponentDefinition, handle(layoutHandle));
+          invokeComponent(encoder, resolver, compiler, meta, {
+            capabilities,
+            attrs: attrsBlock,
+            params: null,
+            hash: args,
+            synthetic: false,
+            blocks: templates(blocks, compiler, resolver, meta),
+          });
+        }
+      } else {
+        throw new Error(`Compile Error: Cannot find component ${tag}`);
+      }
+    }
+  );
+
+  STATEMENTS.addSimple(SexpOpcodes.Partial, (sexp: S.Partial, state) => {
     let [, name, evalInfo] = sexp;
 
     let { encoder, meta } = state;
@@ -391,7 +390,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   });
 
   STATEMENTS.addStatement(
-    Ops.Yield,
+    SexpOpcodes.Yield,
     (sexp: WireFormat.Statements.Yield, encoder, resolver, compiler, meta) => {
       let [, to, params] = sexp;
 
@@ -400,7 +399,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   );
 
   STATEMENTS.addStatement(
-    Ops.AttrSplat,
+    SexpOpcodes.AttrSplat,
     (sexp: WireFormat.Statements.AttrSplat, encoder, resolver, compiler, meta) => {
       let [, to] = sexp;
 
@@ -409,14 +408,17 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   );
 
-  STATEMENTS.addLeaf(Ops.Debugger, (sexp: WireFormat.Statements.Debugger, encoder, meta) => {
-    let [, evalInfo] = sexp;
+  STATEMENTS.addLeaf(
+    SexpOpcodes.Debugger,
+    (sexp: WireFormat.Statements.Debugger, encoder, meta) => {
+      let [, evalInfo] = sexp;
 
-    startDebugger(encoder, meta.evalSymbols!, evalInfo);
-  });
+      startDebugger(encoder, meta.evalSymbols!, evalInfo);
+    }
+  );
 
   STATEMENTS.addStatement(
-    Ops.ClientSideStatement,
+    SexpOpcodes.ClientSideStatement,
     (sexp: WireFormat.Statements.ClientSide, encoder, resolver, compiler, meta) => {
       CLIENT_SIDE.compileSimple(
         sexp as ClientSide.ClientSideStatement,
@@ -428,17 +430,20 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     }
   );
 
-  STATEMENTS.addStatement(Ops.Append, (sexp: S.Append, encoder, resolver, compiler, meta) => {
-    let [, value, trusting] = sexp;
+  STATEMENTS.addStatement(
+    SexpOpcodes.Append,
+    (sexp: S.Append, encoder, resolver, compiler, meta) => {
+      let [, value, trusting] = sexp;
 
-    let returned = compiler.compileInline(sexp, encoder, resolver, meta) || value;
+      let returned = compiler.compileInline(sexp, encoder, resolver, meta) || value;
 
-    if (returned === true) return;
+      if (returned === true) return;
 
-    guardedAppend(value, trusting, { encoder, resolver, meta });
-  });
+      guardedAppend(value, trusting, { encoder, resolver, meta });
+    }
+  );
 
-  STATEMENTS.addStatement(Ops.Block, (sexp: S.Block, encoder, resolver, compiler, meta) => {
+  STATEMENTS.addStatement(SexpOpcodes.Block, (sexp: S.Block, encoder, resolver, compiler, meta) => {
     let [, name, params, hash, named] = sexp;
 
     compiler.compileBlock(
@@ -545,7 +550,7 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
 
   const EXPRESSIONS = (_expressionCompiler = new ExpressionCompilers());
 
-  EXPRESSIONS.addSimple(Ops.Unknown, (sexp: E.Unknown, state) => {
+  EXPRESSIONS.addSimple(SexpOpcodes.Unknown, (sexp: E.Unknown, state) => {
     let name = sexp[1];
 
     let { encoder, resolver, meta } = state;
@@ -562,7 +567,7 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     }
   });
 
-  EXPRESSIONS.addSimple(Ops.Concat, (sexp: E.Concat, state) => {
+  EXPRESSIONS.addSimple(SexpOpcodes.Concat, (sexp: E.Concat, state) => {
     let parts = sexp[1];
     for (let i = 0; i < parts.length; i++) {
       expr(parts[i], state);
@@ -571,7 +576,7 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     state.encoder.push(Op.Concat, parts.length);
   });
 
-  EXPRESSIONS.addSimple(Ops.Helper, (sexp: E.Helper, state) => {
+  EXPRESSIONS.addSimple(SexpOpcodes.Helper, (sexp: E.Helper, state) => {
     let [, name, params, hash] = sexp;
 
     let { resolver, meta } = state;
@@ -599,7 +604,7 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     }
   });
 
-  EXPRESSIONS.addLeaf(Ops.Get, (sexp: E.Get, encoder) => {
+  EXPRESSIONS.addLeaf(SexpOpcodes.Get, (sexp: E.Get, encoder) => {
     let [, head, path] = sexp;
     encoder.push(Op.GetVariable, head);
     for (let i = 0; i < path.length; i++) {
@@ -607,7 +612,7 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     }
   });
 
-  EXPRESSIONS.addLeaf(Ops.MaybeLocal, (sexp: E.MaybeLocal, encoder, meta) => {
+  EXPRESSIONS.addLeaf(SexpOpcodes.MaybeLocal, (sexp: E.MaybeLocal, encoder, meta) => {
     let [, path] = sexp;
 
     if (meta.asPartial) {
@@ -624,15 +629,15 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     }
   });
 
-  EXPRESSIONS.addLeaf(Ops.Undefined, (_sexp, encoder) => {
+  EXPRESSIONS.addLeaf(SexpOpcodes.Undefined, (_sexp, encoder) => {
     return pushPrimitiveReference(encoder, undefined);
   });
 
-  EXPRESSIONS.addLeaf(Ops.HasBlock, (sexp: E.HasBlock, encoder) => {
+  EXPRESSIONS.addLeaf(SexpOpcodes.HasBlock, (sexp: E.HasBlock, encoder) => {
     encoder.push(Op.HasBlock, sexp[1]);
   });
 
-  EXPRESSIONS.addLeaf(Ops.HasBlockParams, (sexp: E.HasBlockParams, encoder) => {
+  EXPRESSIONS.addLeaf(SexpOpcodes.HasBlockParams, (sexp: E.HasBlockParams, encoder) => {
     hasBlockParams(encoder, sexp[1]);
   });
 
@@ -753,11 +758,11 @@ export class Inlines<Locator> {
     let params: Option<C.Params>;
     let hash: Option<C.Hash>;
 
-    if (value[0] === Ops.Helper) {
+    if (value[0] === SexpOpcodes.Helper) {
       name = value[1];
       params = value[2];
       hash = value[3];
-    } else if (value[0] === Ops.Unknown) {
+    } else if (value[0] === SexpOpcodes.Unknown) {
       name = value[1];
       params = hash = null;
     } else {

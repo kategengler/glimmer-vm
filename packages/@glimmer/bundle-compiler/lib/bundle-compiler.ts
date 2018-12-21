@@ -1,7 +1,6 @@
 import { ASTPluginBuilder, preprocess } from '@glimmer/syntax';
 import { TemplateCompiler } from '@glimmer/compiler';
 import { expect } from '@glimmer/util';
-import { SerializedTemplateBlock } from '@glimmer/wire-format';
 import {
   ProgramSymbolTable,
   ModuleLocator,
@@ -10,6 +9,7 @@ import {
   CompilableTemplate,
   SerializedHeap,
   ConstantPool,
+  SerializedTemplateBlock,
 } from '@glimmer/interfaces';
 import {
   CompilableProgram as CompilableProgramInstance,

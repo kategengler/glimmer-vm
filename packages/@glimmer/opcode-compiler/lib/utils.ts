@@ -1,6 +1,11 @@
-import { NamedBlocks as INamedBlocks, Option, CompilableBlock } from '@glimmer/interfaces';
-import * as WireFormat from '@glimmer/wire-format';
+import {
+  NamedBlocks as INamedBlocks,
+  Option,
+  CompilableBlock,
+  WireFormat,
+} from '@glimmer/interfaces';
 import { dict } from '@glimmer/util';
+import { NamedBlocks } from '@glimmer/wire-format';
 
 interface NamedBlocksDict {
   [key: string]: Option<CompilableBlock>;
@@ -58,7 +63,7 @@ function namedBlocks(
 ): INamedBlocks {
   let out: NamedBlocksDict = dict();
 
-  new WireFormat.NamedBlocks(blocks).forEach((key, value) => {
+  new NamedBlocks(blocks).forEach((key, value) => {
     out[key] = callback(value || null);
   });
 

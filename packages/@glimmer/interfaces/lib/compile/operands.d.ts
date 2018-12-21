@@ -1,4 +1,4 @@
-import { Option } from '@glimmer/interfaces';
+import { Option } from '../core';
 
 export interface OptionStringOperand {
   readonly type: 'option-string';

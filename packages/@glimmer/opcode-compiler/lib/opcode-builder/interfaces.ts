@@ -20,11 +20,10 @@ import {
   OtherOperand,
   OptionStringOperand,
   LabelOperand,
+  WireFormat,
 } from '@glimmer/interfaces';
-import * as WireFormat from '@glimmer/wire-format';
 
 import { Op, MachineOp } from '@glimmer/vm';
-import { Core } from '@glimmer/wire-format';
 import { InstructionEncoder } from '@glimmer/encoder';
 
 export type Label = string;
@@ -91,15 +90,15 @@ export interface CurryComponent {
 
 export interface CompileBlock {
   name: string;
-  params: Core.Params;
-  hash: Core.Hash;
+  params: WireFormat.Core.Params;
+  hash: WireFormat.Core.Hash;
   blocks: NamedBlocks;
 }
 
 export interface CompileHelper {
   handle: number;
-  params: Option<Core.Params>;
-  hash: Core.Hash;
+  params: Option<WireFormat.Core.Params>;
+  hash: WireFormat.Core.Hash;
 }
 
 export function str(value: string): StringOperand {

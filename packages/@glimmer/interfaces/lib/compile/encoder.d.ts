@@ -1,7 +1,8 @@
 import { CompileTimeConstants, CompileTimeHeap } from '../program';
 import { Dict } from '../core';
-import { BuilderOperands, Operands, BuilderOperand } from './operands';
-import { Compiler, STDLib } from '../template';
+import { BuilderOperands, Operands, BuilderOperand, MachineBuilderOperand } from './operands';
+import { STDLib, ContainingMetadata } from '../template';
+import { CompileTimeLookup } from '../serialize';
 
 export interface Labels<InstructionEncoder> {
   readonly labels: Dict<number>;
@@ -12,14 +13,27 @@ export interface Labels<InstructionEncoder> {
   patch(encoder: InstructionEncoder): void;
 }
 
+export const enum HighLevelBuilderOp {
+  Expr = 'Expr',
+}
+
+export type BuilderOpcode<Op, MachineOp> = Op | MachineOp | HighLevelBuilderOp;
+
+export interface BuilderOp<Op, MachineOp> {
+  op: BuilderOpcode<Op, MachineOp>;
+  op1?: MachineBuilderOperand;
+  op2?: MachineBuilderOperand;
+  op3?: MachineBuilderOperand;
+}
+
+export type BuilderOps<Op, MachineOp> = BuilderOp<Op, MachineOp>[];
+
 /**
  * The Encoder receives a stream of opcodes from the syntax compiler and turns
  * them into a binary program.
  */
 export interface Encoder<InstructionEncoder, Op extends number, MachineOp extends number> {
   isEager: boolean;
-
-  readonly constants: CompileTimeConstants;
 
   /**
    * Finalize the current compilation unit, add a `(Return)`, and push the opcodes from
@@ -40,6 +54,8 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
    *   { type: "type", value: value }
    */
   push(opcode: Op | MachineOp, ...args: BuilderOperands): void;
+
+  concat(opcodes: BuilderOps<Op, MachineOp>): void;
 
   /**
    * Start a new labels block. A labels block is a scope for labels that
@@ -78,4 +94,15 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
   label(name: string): void;
 
   operand(operand: BuilderOperand): number;
+}
+
+export interface ExprCompilerState<
+  Locator,
+  InstructionEncoder,
+  Op extends number,
+  MachineOp extends number
+> {
+  encoder: Encoder<InstructionEncoder, Op, MachineOp>;
+  resolver: CompileTimeLookup<Locator>;
+  meta: ContainingMetadata<Locator>;
 }

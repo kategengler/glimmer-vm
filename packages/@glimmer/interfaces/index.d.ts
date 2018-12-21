@@ -13,3 +13,6 @@ export { default as ComponentCapabilities } from './lib/component-capabilities';
 
 import * as Simple from './lib/dom/simple';
 export { Simple };
+
+import * as WireFormat from './lib/compile/wire-format';
+export { WireFormat };

@@ -1,4 +1,4 @@
-import { Simple } from '@glimmer/interfaces';
+import * as Simple from './simple';
 
 export type NodeToken = number;
 

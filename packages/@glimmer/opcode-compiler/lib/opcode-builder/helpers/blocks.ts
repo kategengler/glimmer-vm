@@ -6,8 +6,8 @@ import {
   SymbolTable,
   CompilableTemplate,
   NamedBlocks,
+  WireFormat,
 } from '@glimmer/interfaces';
-import * as WireFormat from '@glimmer/wire-format';
 import { Op, MachineOp, $fp } from '@glimmer/vm';
 import { EMPTY_BLOCKS, CompilableBlockImpl, PLACEHOLDER_HANDLE } from '@glimmer/opcode-compiler';
 

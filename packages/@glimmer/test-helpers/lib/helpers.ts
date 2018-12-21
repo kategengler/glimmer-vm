@@ -1,7 +1,6 @@
 import { precompile as rawPrecompile, PrecompileOptions } from '@glimmer/compiler';
-import { Opaque, Option } from '@glimmer/interfaces';
+import { Opaque, Option, WireFormat } from '@glimmer/interfaces';
 import { Environment } from '@glimmer/runtime';
-import * as WireFormat from '@glimmer/wire-format';
 import { EndTag, Token, tokenize } from 'simple-html-tokenizer';
 
 // For Phantom

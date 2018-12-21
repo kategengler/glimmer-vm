@@ -60,15 +60,7 @@ export class AppendOpcodes {
       let pos = vm[INNER_VM].fetchRegister($pc) - opcode.size;
 
       /* tslint:disable */
-      [opName, params] = debug(
-        pos,
-        vm[CONSTANTS],
-        opcode.type,
-        opcode.isMachine,
-        opcode.op1,
-        opcode.op2,
-        opcode.op3
-      );
+      [opName, params] = debug(pos, vm[CONSTANTS], opcode, opcode.isMachine);
 
       // console.log(`${typePos(vm['pc'])}.`);
       console.log(`${pos}. ${logOpcode(opName, params)}`);

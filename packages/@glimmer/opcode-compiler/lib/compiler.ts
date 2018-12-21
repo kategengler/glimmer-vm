@@ -10,8 +10,10 @@ import {
   CompilerArtifacts,
   CompileTimeHeap,
   STDLib,
+  Statements,
+  Expression,
+  Core,
 } from '@glimmer/interfaces';
-import { Statements, Core, Expression } from '@glimmer/wire-format';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 

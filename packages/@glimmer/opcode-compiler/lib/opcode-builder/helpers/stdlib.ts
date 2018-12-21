@@ -61,7 +61,7 @@ function build(
   heap: CompileTimeHeap,
   callback: (builder: OpcodeBuilderEncoder) => void
 ): number {
-  let encoder = new EncoderImpl(constants, true, 0);
+  let encoder = new EncoderImpl(constants, null as any, null as any, true, 0);
   callback(encoder);
   return encoder.commit(heap);
 }

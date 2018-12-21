@@ -11,10 +11,10 @@ import {
   Expression,
   Core,
   SerializedInlineBlock,
-} from '@glimmer/wire-format';
-import { CompileTimeProgram, Operand } from '@glimmer/interfaces';
+} from '@glimmer/interfaces';
 import { Encoder } from './compile/encoder';
 import { CompileTimeHeapImpl } from '@glimmer/program';
+import { Operand } from './compile';
 
 export type CompilableBlock = CompilableTemplate<BlockSymbolTable>;
 

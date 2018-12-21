@@ -4,10 +4,8 @@ import { IArguments } from './vm/arguments';
 
 import { Option } from '@glimmer/util';
 
-import * as WireFormat from '@glimmer/wire-format';
-
 import { PublicVM } from './vm/append';
-import { RuntimeResolver } from '@glimmer/interfaces';
+import { RuntimeResolver, WireFormat } from '@glimmer/interfaces';
 
 export interface DynamicComponentDefinition<Locator> {
   (

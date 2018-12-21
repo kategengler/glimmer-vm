@@ -2,21 +2,13 @@ import {
   ResolvedLayout,
   Option,
   CompilableProgram,
-  ComponentCapabilities,
   MaybeResolvedLayout,
   CompileTimeLookup,
 } from '@glimmer/interfaces';
 
-// TODO: Unwind this
-export interface HandleLayoutResolver<Locator> {
-  getCapabilities(handle: number): ComponentCapabilities;
-  getLayout(handle: number): Option<CompilableProgram>;
-  lookupComponentDefinition(tag: string, referrer: Locator): Option<number>;
-}
-
 export function resolveLayoutForTag<Locator>(
-  resolver: CompileTimeLookup<Locator>,
   tag: string,
+  resolver: CompileTimeLookup<Locator>,
   referrer: Locator
 ): MaybeResolvedLayout {
   let handle = resolver.lookupComponentDefinition(tag, referrer);

@@ -69,10 +69,6 @@ export interface CompileTimeLookup<Locator> {
   getCapabilities(handle: number): ComponentCapabilities;
   getLayout(handle: number): Option<CompilableProgram>;
 
-  // This interface produces module locators (and indicates if a name is present), but does not
-  // produce any actual objects. The main use-case for producing objects is handled above,
-  // with getCapabilities and getLayout, which drastically shrinks the size of the object
-  // that the core interface is forced to reify.
   lookupHelper(name: string, referrer: Locator): Option<number>;
   lookupModifier(name: string, referrer: Locator): Option<number>;
   lookupComponentDefinition(name: string, referrer: Locator): Option<number>;

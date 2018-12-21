@@ -7,9 +7,9 @@ import {
   BlockSymbolTable,
   ContainingMetadata,
   CompileTimeLookup,
+  SerializedInlineBlock,
 } from '@glimmer/interfaces';
 import { PLACEHOLDER_HANDLE } from './interfaces';
-import { SerializedInlineBlock } from '@glimmer/wire-format';
 import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';
 import { compile } from './compile';
 import { meta } from './opcode-builder/helpers/shared';

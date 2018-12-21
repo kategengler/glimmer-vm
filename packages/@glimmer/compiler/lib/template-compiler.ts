@@ -6,6 +6,7 @@ import { getAttrNamespace } from './utils';
 import { Opaque } from '@glimmer/interfaces';
 import { SymbolAllocator, InOp as SymbolInOp, OutOp as SymbolOutOp } from './allocate-symbols';
 import { PathHead } from './compiler-ops';
+import { DEBUG } from '@glimmer/local-debug-flags';
 
 export interface CompileOptions {
   meta: Opaque;
@@ -28,7 +29,11 @@ export default class TemplateCompiler {
     let symbols: SymbolOutOp[] = new SymbolAllocator(opcodes).process();
 
     let out = JavaScriptCompiler.process(symbols, ast['symbols'], options);
-    console.log(out);
+
+    if (DEBUG) {
+      console.log(`Template ->`, out);
+    }
+
     return out;
   }
 

@@ -1,7 +1,6 @@
 import { InstructionEncoder, OpcodeSize } from '@glimmer/encoder';
 import {
   CompileTimeConstants,
-  Encoder,
   Labels,
   BuilderOperands,
   LabelOperand,
@@ -10,12 +9,22 @@ import {
   Operand,
   CompileTimeHeap,
   CompileTimeProgram,
+  BuilderOps,
+  ContainingMetadata,
+  CompileTimeLookup,
+  BuilderOpcode,
+  HighLevelBuilderOp,
+  BuilderOp,
+  WireFormat,
 } from '@glimmer/interfaces';
 import { MachineOp, Op, isMachineOp } from '@glimmer/vm';
 import { LazyConstants, CompileTimeHeapImpl, Program } from '@glimmer/program';
 import { Stack, dict, expect } from '@glimmer/util';
 import { commit } from '../compiler';
 import { compileStd } from './helpers/stdlib';
+import { OpcodeBuilderEncoder } from './interfaces';
+import { ExprCompilerState } from '../syntax';
+import { expr } from './helpers/shared';
 
 export type OpcodeBuilderLabels = Labels<InstructionEncoder>;
 
@@ -41,16 +50,42 @@ export class LabelsImpl implements Labels<InstructionEncoder> {
   }
 }
 
-export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
+export type OpcodeBuilderOpcode = BuilderOpcode<Op, MachineOp>;
+export type OpcodeBuilderOp = BuilderOp<Op, MachineOp>;
+
+export function op(name: OpcodeBuilderOpcode, ...args: BuilderOperands): OpcodeBuilderOp {
+  switch (args.length) {
+    case 0:
+      return { op: name };
+    case 1:
+      return { op: name, op1: args[0] };
+    case 2:
+      return { op: name, op1: args[0], op2: args[1] };
+    case 3:
+      return { op: name, op1: args[0], op2: args[1], op3: args[2] };
+  }
+}
+
+export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
   private labelsStack = new Stack<OpcodeBuilderLabels>();
   private encoder: InstructionEncoder;
 
   constructor(
-    readonly constants: CompileTimeConstants,
+    private constants: CompileTimeConstants,
+    private resolver: CompileTimeLookup<Locator>,
+    private meta: ContainingMetadata<Locator>,
     readonly isEager: boolean,
     private size: number
   ) {
     this.encoder = new InstructionEncoder([]);
+  }
+
+  get state(): ExprCompilerState<Locator> {
+    return {
+      encoder: this,
+      resolver: this.resolver,
+      meta: this.meta,
+    };
   }
 
   private get nextPos(): number {
@@ -62,13 +97,36 @@ export class EncoderImpl implements Encoder<InstructionEncoder, Op, MachineOp> {
     return commit(heap, this.size, this.encoder.buffer);
   }
 
-  push(name: Op | MachineOp, ...args: BuilderOperands): void {
-    if (isMachineOp(name)) {
+  push(name: OpcodeBuilderOpcode, ...args: BuilderOperands): void {
+    if (typeof name === 'string') {
+      this.pushHighLevel(name, args[0]);
+    } else if (isMachineOp(name)) {
       let operands = args.map((operand, i) => this.operand(operand, i));
       return this.encoder.encode(name, OpcodeSize.MACHINE_MASK, ...operands);
     } else {
       let operands = args.map((operand, i) => this.operand(operand, i));
       return this.encoder.encode(name, 0, ...operands);
+    }
+  }
+
+  private pushHighLevel(name: HighLevelBuilderOp, arg: unknown): void {
+    switch (name) {
+      case HighLevelBuilderOp.Expr:
+        expr((arg as any) as WireFormat.Expression, this.state);
+    }
+  }
+
+  concat(opcodes: BuilderOps<Op, MachineOp>): void {
+    for (let op of opcodes) {
+      if (op.op3 !== undefined) {
+        this.push(op.op, op.op1, op.op2, op.op3);
+      } else if (op.op2 !== undefined) {
+        this.push(op.op, op.op1, op.op2);
+      } else if (op.op1 !== undefined) {
+        this.push(op.op, op.op1);
+      } else {
+        this.push(op.op);
+      }
     }
   }
 

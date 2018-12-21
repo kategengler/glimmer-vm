@@ -1,18 +1,5 @@
-import { CompileTimeConstants, Option, Opaque, Recast } from '@glimmer/interfaces';
-import {
-  opcodeMetadata,
-  Op,
-  Register,
-  $s0,
-  $s1,
-  $t0,
-  $t1,
-  $v0,
-  $fp,
-  $sp,
-  $pc,
-  $ra,
-} from '@glimmer/vm';
+import { CompileTimeConstants, Option, Opaque, Recast, Opcode } from '@glimmer/interfaces';
+import { opcodeMetadata, Register, $s0, $s1, $t0, $t1, $v0, $fp, $sp, $pc, $ra } from '@glimmer/vm';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { unreachable, dict } from '@glimmer/util';
 import { Primitive } from '@glimmer/debug';
@@ -40,18 +27,15 @@ export function debugSlice(program: RuntimeProgram<unknown>, start: number, end:
 
     let _size = 0;
     for (let i = start; i < end; i = i + _size) {
-      let { type, op1, op2, op3, size, isMachine } = program.opcode(i);
+      let opcode = program.opcode(i);
       let [name, params] = debug(
         i,
         constants as Recast<CompileTimeConstants, DebugConstants>,
-        type,
-        isMachine,
-        op1,
-        op2,
-        op3
+        opcode,
+        opcode.isMachine
       );
       console.log(`${i}. ${logOpcode(name, params)}`);
-      _size = size;
+      _size = opcode.size;
     }
     program.opcode(-_size);
     console.groupEnd();
@@ -97,14 +81,26 @@ function json(param: Opaque) {
   }
 }
 
+export function opcodeOperand(opcode: Opcode, index: number): number {
+  switch (index) {
+    case 0:
+      return opcode.op1;
+    case 1:
+      return opcode.op2;
+    case 2:
+      return opcode.op3;
+    default:
+      throw new Error(`Unexpected operand index (must be 0-2)`);
+  }
+}
+
 export function debug(
   pos: number,
   c: DebugConstants,
-  op: Op,
-  isMachine: 0 | 1,
-  ...operands: number[]
+  op: Opcode,
+  isMachine: 0 | 1
 ): [string, object] {
-  let metadata = opcodeMetadata(op, isMachine);
+  let metadata = opcodeMetadata(op.type, isMachine);
 
   if (!metadata) {
     throw unreachable(`Missing Opcode Metadata for ${op}`);
@@ -113,55 +109,58 @@ export function debug(
   let out = dict<Opaque>();
 
   metadata.ops.forEach((operand, index: number) => {
-    let op = operands[index];
+    let actualOperand = opcodeOperand(op, index);
 
     switch (operand.type) {
       case 'to':
-        out[operand.name] = pos + op;
+        out[operand.name] = pos + actualOperand;
         break;
       case 'u32':
       case 'i32':
       case 'symbol':
       case 'block':
-        out[operand.name] = op;
+      case 'locator':
+        out[operand.name] = actualOperand;
         break;
       case 'handle':
-        out[operand.name] = c.resolveHandle(op);
+        out[operand.name] = c.resolveHandle(actualOperand);
         break;
       case 'str':
-        out[operand.name] = c.getString(op);
+        out[operand.name] = c.getString(actualOperand);
         break;
       case 'option-str':
-        out[operand.name] = op ? c.getString(op) : null;
+        out[operand.name] = actualOperand ? c.getString(actualOperand) : null;
         break;
       case 'str-array':
-        out[operand.name] = c.getStringArray(op);
+        out[operand.name] = c.getStringArray(actualOperand);
         break;
       case 'array':
-        out[operand.name] = c.getArray(op);
+        out[operand.name] = c.getArray(actualOperand);
         break;
       case 'bool':
-        out[operand.name] = !!op;
+        out[operand.name] = !!actualOperand;
         break;
       case 'primitive':
-        out[operand.name] = decodePrimitive(op, c);
+        out[operand.name] = decodePrimitive(actualOperand, c);
         break;
       case 'register':
-        out[operand.name] = decodeRegister(op);
+        out[operand.name] = decodeRegister(actualOperand);
         break;
       case 'serializable':
-        out[operand.name] = c.getSerializable(op);
+        out[operand.name] = c.getSerializable(actualOperand);
         break;
       case 'lazy-constant':
       case 'unknown':
-        out[operand.name] = (c as Recast<DebugConstants, LazyDebugConstants>).getOther(op);
+        out[operand.name] = (c as Recast<DebugConstants, LazyDebugConstants>).getOther(
+          actualOperand
+        );
         break;
       case 'symbol-table':
       case 'table':
-        out[operand.name] = c.getSerializable(op);
+        out[operand.name] = c.getSerializable(actualOperand);
         break;
       case 'scope':
-        out[operand.name] = `<scope ${op}>`;
+        out[operand.name] = `<scope ${actualOperand}>`;
         break;
       default:
         throw new Error(`Unexpected operand type ${operand.type} for debug output`);

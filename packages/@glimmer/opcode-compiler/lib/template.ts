@@ -4,9 +4,10 @@ import {
   Option,
   LayoutWithContext,
   CompileTimeLookup,
+  SerializedTemplateWithLazyBlock,
+  SerializedTemplateBlock,
 } from '@glimmer/interfaces';
 import { assign } from '@glimmer/util';
-import { SerializedTemplateBlock, SerializedTemplateWithLazyBlock } from '@glimmer/wire-format';
 import { CompilableProgram as CompilableProgramInstance } from './compilable-template';
 import { WrappedBuilder } from './wrapped-component';
 import { OpcodeBuilderCompiler } from './opcode-builder/interfaces';

@@ -31,7 +31,7 @@ export default function builder<Locator>(
   return {
     resolver,
     compiler,
-    encoder: new EncoderImpl(compiler.constants, compiler.isEager, size),
+    encoder: new EncoderImpl(compiler.constants, resolver, meta, compiler.isEager, size),
     meta,
   };
 }
