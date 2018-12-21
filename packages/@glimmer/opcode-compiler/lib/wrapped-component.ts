@@ -50,7 +50,6 @@ export class WrappedBuilder<Locator> implements CompilableProgram {
       b.encoder,
       b.resolver,
       b.compiler,
-      b.meta,
       this.layout,
       this.attrsBlockNumber
     ));

@@ -11,12 +11,13 @@ import {
   label,
 } from '../interfaces';
 import { PrimitiveType } from '@glimmer/program';
-import { Op, MachineOp, SavedRegister, $v0 } from '@glimmer/vm';
+import { SavedRegister, $v0 } from '@glimmer/vm';
 import { Primitive } from '../../interfaces';
-import { Option, BuilderOperand } from '@glimmer/interfaces';
+import { Option, Op, MachineOp } from '@glimmer/interfaces';
 import { compileArgs } from './shared';
 import { EMPTY_BLOCKS } from '../../utils';
 import { ExprCompilerState } from '../../syntax';
+import { OpcodeBuilderOperand } from '../encoder';
 
 export function pushPrimitiveReference(encoder: OpcodeBuilderEncoder, value: Primitive) {
   primitive(encoder, value);
@@ -25,7 +26,7 @@ export function pushPrimitiveReference(encoder: OpcodeBuilderEncoder, value: Pri
 
 export function primitive(encoder: OpcodeBuilderEncoder, _primitive: Primitive) {
   let type: PrimitiveType = PrimitiveType.NUMBER;
-  let primitive: BuilderOperand;
+  let primitive: OpcodeBuilderOperand;
   switch (typeof _primitive) {
     case 'number':
       if ((_primitive as number) % 1 === 0) {
@@ -73,7 +74,11 @@ export function hasBlockParams(encoder: OpcodeBuilderEncoder, to: number) {
   encoder.push(Op.HasBlockParams);
 }
 
-function sizeImmediate(encoder: OpcodeBuilderEncoder, shifted: number, primitive: BuilderOperand) {
+function sizeImmediate(
+  encoder: OpcodeBuilderEncoder,
+  shifted: number,
+  primitive: OpcodeBuilderOperand
+) {
   if (shifted >= OpcodeSize.MAX_SIZE || shifted < 0) {
     if (typeof primitive !== 'number') {
       throw new Error(

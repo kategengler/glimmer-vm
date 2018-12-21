@@ -7,15 +7,18 @@ import {
   CompilableTemplate,
   NamedBlocks,
   WireFormat,
+  HighLevelBuilderOp,
+  MachineOp,
+  Op,
 } from '@glimmer/interfaces';
-import { Op, MachineOp, $fp } from '@glimmer/vm';
+import { $fp } from '@glimmer/vm';
 import { EMPTY_BLOCKS, CompilableBlockImpl, PLACEHOLDER_HANDLE } from '@glimmer/opcode-compiler';
 
-import { OpcodeBuilderEncoder, OpcodeBuilderCompiler } from '../interfaces';
+import { OpcodeBuilderEncoder, OpcodeBuilderCompiler, other, args, option } from '../interfaces';
 
-import { compileArgs } from './shared';
 import { primitive } from './vm';
 import { NamedBlocksImpl } from '../../utils';
+import { op, OpcodeBuilderOps } from '../encoder';
 
 export function invokeStatic(
   encoder: OpcodeBuilderEncoder,
@@ -32,30 +35,33 @@ export function invokeStatic(
     if (handle === PLACEHOLDER_HANDLE) {
       encoder.push(MachineOp.InvokeStatic, () => compilable.compile());
     } else {
-      console.log(handle);
       encoder.push(MachineOp.InvokeStatic, handle);
     }
   } else {
-    encoder.push(Op.Constant, { type: 'other', value: compilable });
-    encoder.push(Op.CompileBlock);
-    encoder.push(MachineOp.InvokeVirtual);
+    encoder.concat([
+      op(Op.Constant, other(compilable)),
+      op(Op.CompileBlock),
+      op(MachineOp.InvokeVirtual),
+    ]);
   }
 }
 
-export function yieldBlock<Locator>(
+export function yieldBlock(
   to: number,
   params: Option<WireFormat.Core.Params>,
-  encoder: OpcodeBuilderEncoder,
-  resolver: CompileTimeLookup<Locator>,
-  compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>
-) {
-  compileArgs(params, null, EMPTY_BLOCKS, false, { encoder, resolver, meta });
-  encoder.push(Op.GetBlock, to);
-  if (!compiler.isEager) encoder.push(Op.CompileBlock);
-  encoder.push(Op.InvokeYield);
-  encoder.push(Op.PopScope);
-  encoder.push(MachineOp.PopFrame);
+  isEager: boolean
+): OpcodeBuilderOps {
+  return [
+    op(
+      HighLevelBuilderOp.Args,
+      args({ params, hash: null, blocks: EMPTY_BLOCKS, synthetic: false })
+    ),
+    op(Op.GetBlock, to),
+    op(HighLevelBuilderOp.Option, option(!isEager ? [op(Op.CompileBlock)] : null)),
+    op(Op.InvokeYield),
+    op(Op.PopScope),
+    op(MachineOp.PopFrame),
+  ];
 }
 
 export function pushYieldableBlock(encoder: OpcodeBuilderEncoder, block: Option<CompilableBlock>) {

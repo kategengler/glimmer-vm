@@ -1,6 +1,6 @@
-import { Opaque, Option } from '@glimmer/interfaces';
+import { Opaque, Option, Op } from '@glimmer/interfaces';
 import { VersionedPathReference } from '@glimmer/reference';
-import { Op, $v0 } from '@glimmer/vm';
+import { $v0 } from '@glimmer/vm';
 import { ScopeBlock } from '../../environment';
 import { APPEND_OPCODES } from '../../opcodes';
 import { FALSE_REFERENCE, TRUE_REFERENCE } from '../../references';

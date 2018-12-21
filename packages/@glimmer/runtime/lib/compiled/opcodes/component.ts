@@ -1,4 +1,4 @@
-import { Op, $v0, $t1, $t0 } from '@glimmer/vm';
+import { $v0, $t1, $t0 } from '@glimmer/vm';
 import { Opaque, Option, Dict, dict, assert, unreachable, expect } from '@glimmer/util';
 import {
   VMHandle,
@@ -7,6 +7,7 @@ import {
   ComponentDefinitionState,
   Recast,
   RuntimeResolver,
+  Op,
 } from '@glimmer/interfaces';
 import {
   CONSTANT_TAG,

@@ -1,5 +1,4 @@
 import { Reference, Tag, isConst } from '@glimmer/reference';
-import { Op } from '@glimmer/vm';
 import {
   check,
   CheckString,
@@ -18,7 +17,7 @@ import {
 import { CheckPathReference } from './-debug-strip';
 import { isEmpty, isSafeString, isFragment, isNode, shouldCoerce } from '../../dom/normalize';
 import DynamicTextContent from '../../vm/content/text';
-import { ContentType } from '@glimmer/interfaces';
+import { ContentType, Op } from '@glimmer/interfaces';
 
 export class IsCurriedComponentDefinitionReference extends ConditionalReference {
   static create(inner: Reference<Opaque>): IsCurriedComponentDefinitionReference {

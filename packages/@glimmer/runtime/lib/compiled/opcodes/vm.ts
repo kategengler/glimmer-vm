@@ -1,5 +1,4 @@
-import { Op } from '@glimmer/vm';
-import { CompilableTemplate, Opaque, Option, Recast, VMHandle } from '@glimmer/interfaces';
+import { CompilableTemplate, Opaque, Option, Recast, VMHandle, Op } from '@glimmer/interfaces';
 import {
   CONSTANT_TAG,
   isConst,

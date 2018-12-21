@@ -5,9 +5,11 @@ import {
   CompileTimeLookup,
   ContainingMetadata,
   SexpOpcodes,
+  Op,
+  MachineOp,
 } from '@glimmer/interfaces';
 import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
-import { $fp, Op, $s0, MachineOp, $sp } from '@glimmer/vm';
+import { $fp, $s0, $sp } from '@glimmer/vm';
 import * as ClientSide from './client-side';
 import OpcodeBuilder, {
   str,
@@ -389,21 +391,18 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     });
   });
 
-  STATEMENTS.addStatement(
-    SexpOpcodes.Yield,
-    (sexp: WireFormat.Statements.Yield, encoder, resolver, compiler, meta) => {
-      let [, to, params] = sexp;
+  STATEMENTS.addStatement(SexpOpcodes.Yield, (sexp: WireFormat.Statements.Yield, encoder) => {
+    let [, to, params] = sexp;
 
-      yieldBlock(to, params, encoder, resolver, compiler, meta);
-    }
-  );
+    encoder.concat(yieldBlock(to, params, encoder.isEager));
+  });
 
   STATEMENTS.addStatement(
     SexpOpcodes.AttrSplat,
-    (sexp: WireFormat.Statements.AttrSplat, encoder, resolver, compiler, meta) => {
+    (sexp: WireFormat.Statements.AttrSplat, encoder) => {
       let [, to] = sexp;
 
-      yieldBlock(to, EMPTY_ARRAY, encoder, resolver, compiler, meta);
+      encoder.concat(yieldBlock(to, EMPTY_ARRAY, encoder.isEager));
       // encoder.isComponentAttrs = false;
     }
   );

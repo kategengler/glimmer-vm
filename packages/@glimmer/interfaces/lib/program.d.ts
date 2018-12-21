@@ -1,7 +1,7 @@
 import { Opaque, Unique, Option } from './core';
-import { Op } from '@glimmer/vm';
 import { STDLib } from './template';
 import { StdlibOperand } from './compile';
+import { Op } from './vm-opcodes';
 
 export interface Opcode {
   offset: number;

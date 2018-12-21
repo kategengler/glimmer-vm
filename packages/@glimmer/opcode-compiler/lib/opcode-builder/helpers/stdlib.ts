@@ -1,10 +1,10 @@
-import { Op, $s0 } from '@glimmer/vm';
+import { $s0 } from '@glimmer/vm';
 
 import { OpcodeBuilderEncoder } from '../interfaces';
 import { invokePreparedComponent, invokeBareComponent } from './components';
 import { StdLib } from '../builder';
 import { EncoderImpl } from '../encoder';
-import { ContentType, CompileTimeConstants, CompileTimeHeap } from '@glimmer/interfaces';
+import { ContentType, CompileTimeConstants, CompileTimeHeap, Op } from '@glimmer/interfaces';
 import { switchCases } from './conditional';
 
 export function main(encoder: OpcodeBuilderEncoder) {

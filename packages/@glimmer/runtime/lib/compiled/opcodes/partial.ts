@@ -1,10 +1,9 @@
 import { VersionedPathReference } from '@glimmer/reference';
-import { Op } from '@glimmer/vm';
 import { APPEND_OPCODES } from '../../opcodes';
 import { PartialDefinition } from '@glimmer/opcode-compiler';
 import { assert, Dict } from '@glimmer/util';
 import { check } from '@glimmer/debug';
-import { Opaque } from '@glimmer/interfaces';
+import { Opaque, Op } from '@glimmer/interfaces';
 import { CheckReference } from './-debug-strip';
 import { CONSTANTS } from '../../symbols';
 

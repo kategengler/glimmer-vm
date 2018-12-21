@@ -1,6 +1,6 @@
 import { OpcodeBuilderEncoder, When, label } from '../interfaces';
-import { Op, MachineOp } from '@glimmer/vm';
 import { labels } from './labels';
+import { Op, MachineOp } from '@glimmer/interfaces';
 
 export function switchCases(encoder: OpcodeBuilderEncoder, callback: (when: When) => void) {
   // Setup the switch DSL

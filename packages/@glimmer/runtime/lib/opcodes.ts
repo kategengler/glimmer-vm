@@ -2,10 +2,10 @@ import { LowLevelVM, VM, UpdatingVM } from './vm';
 
 import { Option, Dict, Slice as ListSlice, initializeGuid, fillNulls, assert } from '@glimmer/util';
 import { recordStackSize } from '@glimmer/debug';
-import { Op, $pc, $sp, $ra, $fp } from '@glimmer/vm';
+import { $pc, $sp, $ra, $fp } from '@glimmer/vm';
 import { Tag } from '@glimmer/reference';
 import { opcodeMetadata } from '@glimmer/vm';
-import { Opcode, Opaque } from '@glimmer/interfaces';
+import { Opcode, Opaque, Op } from '@glimmer/interfaces';
 import { DEBUG, DEVMODE } from '@glimmer/local-debug-flags';
 // these import bindings will be stripped from build
 import { debug, logOpcode } from '@glimmer/opcode-compiler';

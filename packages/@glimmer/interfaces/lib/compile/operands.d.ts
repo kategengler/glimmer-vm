@@ -1,4 +1,7 @@
 import { Option } from '../core';
+import * as WireFormat from './wire-format';
+import { NamedBlocks } from '../template';
+import { BuilderOps } from './encoder';
 
 export interface OptionStringOperand {
   readonly type: 'option-string';
@@ -56,6 +59,30 @@ export interface StdlibOperand {
   value: 'main' | 'trusting-append' | 'cautious-append';
 }
 
+// TODO: Derive these as well as the shape of valid op() calls from the
+// operand list and high level extensions
+export interface ExpressionOperand {
+  type: 'expr';
+  value: WireFormat.Expression;
+}
+
+export interface ArgsOptions {
+  params: Option<WireFormat.Core.Params>;
+  hash: WireFormat.Core.Hash;
+  blocks: NamedBlocks;
+  synthetic: boolean;
+}
+
+export interface ArgsOperand {
+  type: 'args';
+  value: ArgsOptions;
+}
+
+export interface OptionOperand {
+  type: 'option';
+  value: Option<BuilderOps>;
+}
+
 export type NonlabelBuilderOperand =
   | OptionStringOperand
   | StringOperand
@@ -70,7 +97,8 @@ export type NonlabelBuilderOperand =
   | StdlibOperand
   | number;
 
-export type BuilderOperand = NonlabelBuilderOperand | LabelOperand;
+export type HighLevelOperand = ExpressionOperand | ArgsOperand | OptionOperand;
+export type BuilderOperand = NonlabelBuilderOperand | LabelOperand | HighLevelOperand;
 export type MachineBuilderOperand = BuilderOperand | BuilderHandleThunk;
 
 export type BuilderOperandsTuple =

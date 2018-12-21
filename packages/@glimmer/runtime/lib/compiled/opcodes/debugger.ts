@@ -1,9 +1,8 @@
-import { Opaque } from '@glimmer/interfaces';
+import { Opaque, Op } from '@glimmer/interfaces';
 import { VersionedPathReference } from '@glimmer/reference';
 import { dict } from '@glimmer/util';
 import { ScopeImpl } from '../../environment';
 import { APPEND_OPCODES } from '../../opcodes';
-import { Op } from '@glimmer/vm';
 import { CONSTANTS } from '../../symbols';
 
 export type DebugGet = ((path: string) => unknown);

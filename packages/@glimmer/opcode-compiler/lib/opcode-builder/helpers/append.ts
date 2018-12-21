@@ -1,8 +1,6 @@
-import { MachineOp } from '@glimmer/vm';
-
 import { ExprCompilerState } from '../../syntax';
 import { op } from '../encoder';
-import { HighLevelBuilderOp, WireFormat } from '@glimmer/interfaces';
+import { HighLevelBuilderOp, WireFormat, MachineOp } from '@glimmer/interfaces';
 
 export function guardedAppend<Locator>(
   expression: WireFormat.Expression,
@@ -13,7 +11,7 @@ export function guardedAppend<Locator>(
 
   encoder.concat([
     op(MachineOp.PushFrame),
-    op(HighLevelBuilderOp.Expr, expression),
+    op(HighLevelBuilderOp.Expr, { type: 'expr', value: expression }),
     op(MachineOp.InvokeStatic, {
       type: 'stdlib',
       value: trusting ? 'trusting-append' : 'cautious-append',

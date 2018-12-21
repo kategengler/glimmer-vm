@@ -15,16 +15,20 @@ import {
   BuilderOpcode,
   HighLevelBuilderOp,
   BuilderOp,
-  WireFormat,
+  ArgsOperand,
+  ExpressionOperand,
+  OptionOperand,
+  BuilderOperand,
+  MachineOp,
 } from '@glimmer/interfaces';
-import { MachineOp, Op, isMachineOp } from '@glimmer/vm';
+import { isMachineOp } from '@glimmer/vm';
 import { LazyConstants, CompileTimeHeapImpl, Program } from '@glimmer/program';
 import { Stack, dict, expect } from '@glimmer/util';
 import { commit } from '../compiler';
 import { compileStd } from './helpers/stdlib';
 import { OpcodeBuilderEncoder } from './interfaces';
 import { ExprCompilerState } from '../syntax';
-import { expr } from './helpers/shared';
+import { expr, compileArgs } from './helpers/shared';
 
 export type OpcodeBuilderLabels = Labels<InstructionEncoder>;
 
@@ -50,10 +54,13 @@ export class LabelsImpl implements Labels<InstructionEncoder> {
   }
 }
 
-export type OpcodeBuilderOpcode = BuilderOpcode<Op, MachineOp>;
-export type OpcodeBuilderOp = BuilderOp<Op, MachineOp>;
+export type OpcodeBuilderOpcode = BuilderOpcode;
+export type OpcodeBuilderOp = BuilderOp;
+export type OpcodeBuilderOperand = BuilderOperand;
+export type OpcodeBuilderOperands = BuilderOperands;
+export type OpcodeBuilderOps = BuilderOps;
 
-export function op(name: OpcodeBuilderOpcode, ...args: BuilderOperands): OpcodeBuilderOp {
+export function op(name: OpcodeBuilderOpcode, ...args: OpcodeBuilderOperands): OpcodeBuilderOp {
   switch (args.length) {
     case 0:
       return { op: name };
@@ -97,7 +104,7 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
     return commit(heap, this.size, this.encoder.buffer);
   }
 
-  push(name: OpcodeBuilderOpcode, ...args: BuilderOperands): void {
+  push(name: OpcodeBuilderOpcode, ...args: OpcodeBuilderOperands): void {
     if (typeof name === 'string') {
       this.pushHighLevel(name, args[0]);
     } else if (isMachineOp(name)) {
@@ -112,16 +119,32 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
   private pushHighLevel(name: HighLevelBuilderOp, arg: unknown): void {
     switch (name) {
       case HighLevelBuilderOp.Expr:
-        expr((arg as any) as WireFormat.Expression, this.state);
+        let { value } = (arg as any) as ExpressionOperand;
+        expr(value, this.state);
+        break;
+      case HighLevelBuilderOp.Args: {
+        let { params, hash, blocks, synthetic } = ((arg as any) as ArgsOperand).value;
+        compileArgs(params, hash, blocks, synthetic, this.state);
+        break;
+      }
+      case HighLevelBuilderOp.Option: {
+        let value = ((arg as any) as OptionOperand).value;
+
+        if (value === null) {
+          return;
+        } else {
+          this.concat(value);
+        }
+      }
     }
   }
 
-  concat(opcodes: BuilderOps<Op, MachineOp>): void {
+  concat(opcodes: OpcodeBuilderOps): void {
     for (let op of opcodes) {
       if (op.op3 !== undefined) {
-        this.push(op.op, op.op1, op.op2, op.op3);
+        this.push(op.op, op.op1!, op.op2!, op.op3);
       } else if (op.op2 !== undefined) {
-        this.push(op.op, op.op1, op.op2);
+        this.push(op.op, op.op1!, op.op2);
       } else if (op.op1 !== undefined) {
         this.push(op.op, op.op1);
       } else {
@@ -167,6 +190,8 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
         return operand;
       case 'handle':
         return this.constants.handle(operand.value);
+      case 'expr':
+        throw new Error('TODO: unexpected');
     }
   }
 

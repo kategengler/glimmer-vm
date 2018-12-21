@@ -5,6 +5,8 @@ import {
   CompilableBlock,
   LayoutWithContext,
   WireFormat,
+  Op,
+  MachineOp,
 } from '@glimmer/interfaces';
 
 import {
@@ -17,7 +19,7 @@ import {
   label,
 } from '../interfaces';
 import { resolveLayoutForTag, resolveLayoutForHandle } from '../../resolver';
-import { Op, $s0, $sp, MachineOp, $s1, $v0 } from '@glimmer/vm';
+import { $s0, $sp, $s1, $v0 } from '@glimmer/vm';
 import { NamedBlocksImpl, EMPTY_BLOCKS } from '../../utils';
 import { compileArgs, expr, blockForLayout } from './shared';
 import {
@@ -247,7 +249,6 @@ export function wrappedComponent<Locator>(
   encoder: OpcodeBuilderEncoder,
   resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
-  meta: ContainingMetadata<Locator>,
   layout: LayoutWithContext<Locator>,
   attrsBlockNumber: number
 ) {
@@ -266,7 +267,7 @@ export function wrappedComponent<Locator>(
     encoder.push(Op.PutComponentOperations);
     encoder.push(Op.OpenDynamicElement);
     encoder.push(Op.DidCreateElement, $s0);
-    yieldBlock(attrsBlockNumber, EMPTY_ARRAY, encoder, resolver, compiler, meta);
+    encoder.concat(yieldBlock(attrsBlockNumber, EMPTY_ARRAY, encoder.isEager));
     // encoder.isComponentAttrs = false;
     encoder.push(Op.FlushElement);
 

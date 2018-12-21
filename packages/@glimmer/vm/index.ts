@@ -1,4 +1,4 @@
-export { Op, MachineOp, isMachineOp, isOp } from './lib/opcodes';
+export { isMachineOp, isOp } from './lib/opcodes';
 export {
   MachineRegister,
   SyscallRegister,

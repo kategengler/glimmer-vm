@@ -17,8 +17,8 @@ import {
   CheckInstanceof,
   CheckNull,
 } from '@glimmer/debug';
-import { Simple } from '@glimmer/interfaces';
-import { Op, $t0 } from '@glimmer/vm';
+import { Simple, Op } from '@glimmer/interfaces';
+import { $t0 } from '@glimmer/vm';
 import {
   ModifierDefinition,
   InternalModifierManager,

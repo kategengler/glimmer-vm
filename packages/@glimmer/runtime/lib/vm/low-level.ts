@@ -1,9 +1,9 @@
 import { Opcode } from '@glimmer/program';
-import { Option, Opaque, RuntimeHeap } from '@glimmer/interfaces';
+import { Option, Opaque, RuntimeHeap, MachineOp } from '@glimmer/interfaces';
 import { APPEND_OPCODES } from '../opcodes';
 import VM from './append';
 import { DEVMODE } from '@glimmer/local-debug-flags';
-import { MachineRegister, $pc, $ra, $fp, $sp, MachineOp } from '@glimmer/vm';
+import { MachineRegister, $pc, $ra, $fp, $sp } from '@glimmer/vm';
 import { assert } from '@glimmer/util';
 
 export interface LowLevelRegisters {

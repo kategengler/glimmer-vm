@@ -103,7 +103,7 @@ export interface BlockCompiler<Op extends number, MachineOp extends number> {
   // on the builder
   compileInline<Locator>(
     sexp: Statements.Append,
-    encoder: Encoder<Locator, Op, MachineOp>,
+    encoder: Encoder<Locator>,
     resolver: CompileTimeLookup<Locator>,
     meta: ContainingMetadata<Locator>
   ): ['expr', Expression] | true;
@@ -115,7 +115,7 @@ export interface BlockCompiler<Op extends number, MachineOp extends number> {
     blocks: NamedBlocks,
     // TODO: Needed because it's passed into macros -- make macros not depend
     // on the builder
-    encoder: Encoder<Locator, Op, MachineOp>,
+    encoder: Encoder<Locator>,
     resolver: CompileTimeLookup<Locator>,
     meta: ContainingMetadata<Locator>
   ): void;
@@ -127,12 +127,7 @@ export interface CompilerArtifacts {
   stdlib: STDLib;
 }
 
-export interface Compiler<
-  Locator,
-  InstructionEncoder,
-  Op extends number,
-  MachineOp extends number
-> {
+export interface Compiler<Locator, InstructionEncoder> {
   readonly heap: CompileTimeHeap;
   readonly constants: CompileTimeConstants;
   readonly isEager: boolean;
@@ -142,7 +137,7 @@ export interface Compiler<
 
   compileInline(
     sexp: Statements.Append,
-    encoder: Encoder<InstructionEncoder, Op, MachineOp>,
+    encoder: Encoder<InstructionEncoder>,
     resolver: CompileTimeLookup<Locator>,
     meta: ContainingMetadata<Locator>
   ): ['expr', Expression] | true;
@@ -152,9 +147,9 @@ export interface Compiler<
     params: Core.Params,
     hash: Core.Hash,
     blocks: NamedBlocks,
-    encoder: Encoder<InstructionEncoder, Op, MachineOp>,
+    encoder: Encoder<InstructionEncoder>,
     resolver: CompileTimeLookup<Locator>,
-    compiler: Compiler<Locator, InstructionEncoder, Op, MachineOp>,
+    compiler: Compiler<Locator, InstructionEncoder>,
     meta: ContainingMetadata<Locator>
   ): void;
 

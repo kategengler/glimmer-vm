@@ -3,6 +3,7 @@ import { Dict } from '../core';
 import { BuilderOperands, Operands, BuilderOperand, MachineBuilderOperand } from './operands';
 import { STDLib, ContainingMetadata } from '../template';
 import { CompileTimeLookup } from '../serialize';
+import { Op, MachineOp } from '../vm-opcodes';
 
 export interface Labels<InstructionEncoder> {
   readonly labels: Dict<number>;
@@ -15,24 +16,26 @@ export interface Labels<InstructionEncoder> {
 
 export const enum HighLevelBuilderOp {
   Expr = 'Expr',
+  Args = 'Args',
+  Option = 'Option',
 }
 
-export type BuilderOpcode<Op, MachineOp> = Op | MachineOp | HighLevelBuilderOp;
+export type BuilderOpcode = Op | MachineOp | HighLevelBuilderOp;
 
-export interface BuilderOp<Op, MachineOp> {
-  op: BuilderOpcode<Op, MachineOp>;
+export interface BuilderOp {
+  op: BuilderOpcode;
   op1?: MachineBuilderOperand;
   op2?: MachineBuilderOperand;
   op3?: MachineBuilderOperand;
 }
 
-export type BuilderOps<Op, MachineOp> = BuilderOp<Op, MachineOp>[];
+export type BuilderOps = BuilderOp[];
 
 /**
  * The Encoder receives a stream of opcodes from the syntax compiler and turns
  * them into a binary program.
  */
-export interface Encoder<InstructionEncoder, Op extends number, MachineOp extends number> {
+export interface Encoder<InstructionEncoder> {
   isEager: boolean;
 
   /**
@@ -55,7 +58,7 @@ export interface Encoder<InstructionEncoder, Op extends number, MachineOp extend
    */
   push(opcode: Op | MachineOp, ...args: BuilderOperands): void;
 
-  concat(opcodes: BuilderOps<Op, MachineOp>): void;
+  concat(opcodes: BuilderOps): void;
 
   /**
    * Start a new labels block. A labels block is a scope for labels that
@@ -102,7 +105,7 @@ export interface ExprCompilerState<
   Op extends number,
   MachineOp extends number
 > {
-  encoder: Encoder<InstructionEncoder, Op, MachineOp>;
+  encoder: Encoder<InstructionEncoder>;
   resolver: CompileTimeLookup<Locator>;
   meta: ContainingMetadata<Locator>;
 }

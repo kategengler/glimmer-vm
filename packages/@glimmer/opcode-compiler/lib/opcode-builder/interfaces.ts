@@ -21,9 +21,12 @@ import {
   OptionStringOperand,
   LabelOperand,
   WireFormat,
+  ArgsOptions,
+  ArgsOperand,
+  OptionOperand,
+  BuilderOps,
 } from '@glimmer/interfaces';
 
-import { Op, MachineOp } from '@glimmer/vm';
 import { InstructionEncoder } from '@glimmer/encoder';
 
 export type Label = string;
@@ -147,13 +150,21 @@ export function label(value: string): LabelOperand {
   return { type: 'label', value };
 }
 
+export function args(options: ArgsOptions): ArgsOperand {
+  return { type: 'args', value: options };
+}
+
+export function option(list: Option<BuilderOps>): OptionOperand {
+  return { type: 'option', value: list };
+}
+
 export type Operand = number | (() => number);
 
 export type Operands = [] | [Operand] | [Operand, Operand] | [Operand, Operand, Operand];
 
-export type OpcodeBuilderCompiler<Locator> = Compiler<Locator, InstructionEncoder, Op, MachineOp>;
+export type OpcodeBuilderCompiler<Locator> = Compiler<Locator, InstructionEncoder>;
 
-export type OpcodeBuilderEncoder = Encoder<InstructionEncoder, Op, MachineOp>;
+export type OpcodeBuilderEncoder = Encoder<InstructionEncoder>;
 
 export default interface OpcodeBuilder<Locator = unknown> {
   readonly resolver: CompileTimeLookup<Locator>;

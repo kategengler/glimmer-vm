@@ -1,5 +1,4 @@
-import { Option } from '@glimmer/interfaces';
-import { Op, MachineOp } from '@glimmer/vm';
+import { Option, MachineOp, Op } from '@glimmer/interfaces';
 
 import { OpcodeBuilderEncoder, str, CompileHelper, Block } from '../interfaces';
 import { compileArgs } from './shared';

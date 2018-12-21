@@ -1,5 +1,4 @@
-import { Op, MachineOp } from '@glimmer/vm';
-import { CompilerBuffer, Operand } from '@glimmer/interfaces';
+import { CompilerBuffer, Operand, MachineOp, Op } from '@glimmer/interfaces';
 
 export const enum OpcodeSize {
   ARG_SHIFT = 8,

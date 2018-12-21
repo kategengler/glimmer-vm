@@ -153,7 +153,7 @@ export function buildEnum(
   parsed: Dict<NormalizedMetadata>,
   offset: number,
   max?: number
-): string {
+): { enumString: string; predicate: string } {
   let e = [`export const enum ${name} {`];
 
   Object.keys(parsed).forEach((key, i) => {
@@ -163,17 +163,17 @@ export function buildEnum(
   e.push('  Size,');
   e.push('}');
 
+  let enumString = e.join('\n');
+
+  let predicate;
+
   if (max) {
-    e.push(
-      `export function is${name}(value: number): value is ${name} { return value >= ${offset} && value <= ${max}; }`
-    );
+    predicate = `export function is${name}(value: number): value is ${name} { return value >= ${offset} && value <= ${max}; }`;
   } else {
-    e.push(
-      `export function is${name}(value: number): value is ${name} { return value >= ${offset}; }`
-    );
+    predicate = `export function is${name}(value: number): value is ${name} { return value >= ${offset}; }`;
   }
 
-  return e.join('\n');
+  return { enumString, predicate };
 }
 
 export const META_KIND = tuple('METADATA', 'MACHINE_METADATA');

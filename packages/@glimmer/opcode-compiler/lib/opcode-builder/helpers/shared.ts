@@ -7,10 +7,10 @@ import {
   LayoutWithContext,
   CompileTimeLookup,
   WireFormat,
+  Op,
 } from '@glimmer/interfaces';
 import { pushYieldableBlock } from './blocks';
 import { ExprCompilerState, compileExpression } from '../../syntax';
-import { Op } from '@glimmer/vm';
 import { EMPTY_ARRAY } from '@glimmer/util';
 import { primitive } from './vm';
 import { CompilableBlockImpl } from '../../compilable-template';
