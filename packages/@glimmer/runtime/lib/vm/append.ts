@@ -36,7 +36,7 @@ import {
 } from '@glimmer/reference';
 import { RuntimeConstants } from '@glimmer/program';
 import { LabelOpcode, JumpIfNotModifiedOpcode, DidModifyOpcode } from '../compiled/opcodes/vm';
-import LowLevelVM, { Program, LowLevelRegisters, initializeRegisters } from './low-level';
+import LowLevelVM, { Program } from './low-level';
 import { VMState, ListBlockOpcode, TryOpcode, BlockOpcode, Runtime } from './update';
 import RenderResult from './render-result';
 import EvaluationStackImpl, { EvaluationStack } from './stack';
@@ -149,7 +149,6 @@ export default class VM<T> implements PublicVM, InternalVM {
   readonly [CONSTANTS]: RuntimeConstants<T>;
   readonly [ARGS]: Arguments;
   readonly [INNER_VM]: LowLevelVM;
-  readonly [REGISTERS]: LowLevelRegisters = initializeRegisters();
 
   get stack(): EvaluationStackImpl {
     return this[INNER_VM].stack as EvaluationStackImpl;

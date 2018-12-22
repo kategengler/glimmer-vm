@@ -76,7 +76,7 @@ export interface HighLevelCompileOp<T extends HighLevelCompileOpcode = HighLevel
 }
 
 export type CompileAction = void | undefined | BuilderOp | HighLevelBuilderOp;
-export type CompileActions = CompileAction | CompileAction[];
+export type CompileActions = CompileAction | CompileAction[] | void;
 
 /**
  * The Encoder receives a stream of opcodes from the syntax compiler and turns

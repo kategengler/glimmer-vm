@@ -8,12 +8,14 @@ import {
   CompileTimeLookup,
   WireFormat,
   Op,
+  CompileActions,
 } from '@glimmer/interfaces';
 import { pushYieldableBlock } from './blocks';
 import { ExprCompilerState, compileExpression } from '../../syntax';
 import { EMPTY_ARRAY } from '@glimmer/util';
 import { primitive } from './vm';
 import { CompilableBlockImpl } from '../../compilable-template';
+import { op } from '../encoder';
 
 export function compileArgs<Locator>(
   params: Option<WireFormat.Core.Params>,
@@ -46,7 +48,7 @@ export function compileArgs<Locator>(
     names = hash[0];
     let val = hash[1];
     for (let i = 0; i < val.length; i++) {
-      expr(val[i], state);
+      state.encoder.concat(expr(val[i], state));
     }
   }
 
@@ -60,7 +62,7 @@ export function compileParams<Locator>(
   if (!params) return 0;
 
   for (let i = 0; i < params.length; i++) {
-    expr(params[i], state);
+    state.encoder.concat(expr(params[i], state));
   }
 
   return params.length;
@@ -73,7 +75,7 @@ export function params<Locator>(
   if (!params) return 0;
 
   for (let i = 0; i < params.length; i++) {
-    expr(params[i], state);
+    state.encoder.concat(expr(params[i], state));
   }
 
   return params.length;
@@ -82,12 +84,11 @@ export function params<Locator>(
 export function expr<Locator>(
   expression: WireFormat.Expression,
   state: ExprCompilerState<Locator>
-) {
+): CompileActions {
   if (Array.isArray(expression)) {
-    compileExpression(expression, state);
+    return compileExpression(expression, state);
   } else {
-    state.encoder.pushOp(primitive(expression));
-    state.encoder.push(Op.PrimitiveReference);
+    return [primitive(expression), op(Op.PrimitiveReference)];
   }
 }
 

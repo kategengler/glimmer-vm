@@ -85,8 +85,8 @@ export type SimpleCompilerFunction<T extends TupleSyntax, Locator> = ((
 ) => CompileActions | void);
 export type LeafCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
-  encoder: OpcodeBuilderEncoder,
-  meta: ContainingMetadata<Locator>
+  meta: ContainingMetadata<Locator>,
+  isEager: boolean
 ) => CompileActions | void);
 export type RegisteredSyntax<T extends TupleSyntax, Locator> =
   | { type: 'leaf'; f: LeafCompilerFunction<T, Locator> }
@@ -129,23 +129,22 @@ export class ExpressionCompilers<Locator = unknown> {
     this.names[name] = this.funcs.length - 1;
   }
 
-  compile(sexp: WireFormat.TupleExpression, state: ExprCompilerState<Locator>): void {
+  compile(
+    sexp: WireFormat.TupleExpression,
+    state: ExprCompilerState<Locator>
+  ): CompileActions | void {
     let name: number = sexp![this.offset];
     let index = this.names[name];
     let func = this.funcs[index];
     assert(!!func, `expected an implementation for ${sexp[0]}`);
 
-    let ops;
-
     if (func.type === 'mini') {
-      ops = func.f(sexp, state);
+      return func.f(sexp, state);
     } else if (func.type === 'statement') {
       throw new Error(`Can't compile an expression as a statement`);
     } else {
-      ops = func.f(sexp, state.encoder, state.meta);
+      return func.f(sexp, state.meta, state.encoder.isEager);
     }
-
-    concat(state.encoder, ops);
   }
 }
 
@@ -184,6 +183,19 @@ export function concat(encoder: OpcodeBuilderEncoder, action: CompileActions): v
     action.forEach(a => concat(encoder, a));
   } else {
     encoder.pushOp(action);
+  }
+}
+
+export function concatActions(
+  left: ReadonlyArray<CompileAction>,
+  right: CompileActions
+): ReadonlyArray<CompileAction> {
+  if (right === undefined) {
+    return left;
+  } else if (Array.isArray(right)) {
+    return [...left, ...right];
+  } else {
+    return [...left, right];
   }
 }
 
@@ -237,7 +249,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
       concatStatement({ encoder, resolver, compiler, meta }, ops);
       return;
     } else {
-      ops = func.f(sexp as Syntax, encoder, meta);
+      ops = func.f(sexp as Syntax, meta, encoder.isEager);
     }
 
     concat(encoder, ops);
@@ -254,7 +266,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
 
     let ops;
     if (func.type === 'leaf') {
-      ops = func.f(sexp as Syntax, builder.encoder, builder.meta);
+      ops = func.f(sexp as Syntax, builder.meta, builder.encoder.isEager);
     } else if (func.type === 'statement') {
       ops = func.f(
         sexp as Syntax,
@@ -281,7 +293,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
 
     let ops;
     if (func.type === 'leaf') {
-      ops = func.f(sexp, builder.encoder, builder.meta);
+      ops = func.f(sexp, builder.meta, builder.encoder.isEager);
     } else if (func.type === 'statement') {
       ops = func.f(sexp, builder.encoder, builder.resolver, builder.compiler, builder.meta);
       concatStatement(builder, ops);
@@ -308,9 +320,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   });
 
   STATEMENTS.addLeaf(SexpOpcodes.Comment, (sexp: S.Comment) => op(Op.Comment, str(sexp[1])));
-
   STATEMENTS.addLeaf(SexpOpcodes.CloseElement, () => op(Op.CloseElement));
-
   STATEMENTS.addLeaf(SexpOpcodes.FlushElement, () => op(Op.FlushElement));
 
   STATEMENTS.addSimple(SexpOpcodes.Modifier, (sexp, state) => {
@@ -425,7 +435,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
 
     replayableIf(encoder, {
       args() {
-        expr(name, state);
+        state.encoder.concat(expr(name, state));
         encoder.push(Op.Dup, $sp, 0);
         return 2;
       },
@@ -456,7 +466,7 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
     return yieldBlock(to, EMPTY_ARRAY, encoder.isEager);
   });
 
-  STATEMENTS.addLeaf(SexpOpcodes.Debugger, ([, evalInfo], _encoder, meta) =>
+  STATEMENTS.addLeaf(SexpOpcodes.Debugger, ([, evalInfo], meta) =>
     op(Op.Debugger, strArray(meta.evalSymbols!), arr(evalInfo))
   );
 
@@ -547,8 +557,8 @@ export function finishComponentAttr(
 export function compileExpression<Locator>(
   expression: WireFormat.TupleExpression,
   state: ExprCompilerState<Locator>
-): void {
-  expressionCompiler().compile(expression, state);
+): CompileActions | void {
+  return expressionCompiler().compile(expression, state);
 }
 
 let _expressionCompiler: ExpressionCompilers<unknown>;
@@ -563,27 +573,31 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
   EXPRESSIONS.addSimple(SexpOpcodes.Unknown, (sexp, state) => {
     let name = sexp[1];
 
-    let { encoder, resolver, meta } = state;
+    let out: ReadonlyArray<CompileAction> = [];
+
+    let { resolver, meta } = state;
 
     let handle = resolver.lookupHelper(name, meta.referrer);
 
     if (handle !== null) {
-      helper(state, { handle, params: null, hash: null });
+      out = concatActions(out, helper({ handle, params: null, hash: null }));
     } else if (meta.asPartial) {
-      encoder.push(Op.ResolveMaybeLocal, str(name));
+      out = concatActions(out, op(Op.ResolveMaybeLocal, str(name)));
     } else {
-      encoder.push(Op.GetVariable, 0);
-      encoder.push(Op.GetProperty, str(name));
+      out = concatActions(out, [op(Op.GetVariable, 0), op(Op.GetProperty, str(name))]);
     }
+
+    return out as CompileAction[];
   });
 
-  EXPRESSIONS.addSimple(SexpOpcodes.Concat, (sexp, state) => {
-    let parts = sexp[1];
-    for (let i = 0; i < parts.length; i++) {
-      expr(parts[i], state);
+  EXPRESSIONS.addSimple(SexpOpcodes.Concat, ([, parts], state) => {
+    let out: ReadonlyArray<CompileAction> = [];
+
+    for (let part of parts) {
+      out = concatActions(out, expr(part, state));
     }
 
-    state.encoder.push(Op.Concat, parts.length);
+    return [...out, op(Op.Concat, parts.length)];
   });
 
   EXPRESSIONS.addSimple(SexpOpcodes.Helper, (sexp, state) => {
@@ -591,27 +605,36 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
 
     let { resolver, meta } = state;
 
+    let out: ReadonlyArray<CompileAction> = [];
+
     // TODO: triage this in the WF compiler
     if (name === 'component') {
       assert(params.length, 'SYNTAX ERROR: component helper requires at least one argument');
 
       let [definition, ...restArgs] = params;
-      curryComponent(state, {
-        definition,
-        params: restArgs,
-        hash,
-        synthetic: true,
-      });
-      return;
+      return concatActions(
+        out,
+        curryComponent(
+          {
+            definition,
+            params: restArgs,
+            hash,
+            synthetic: true,
+          },
+          state.meta.referrer
+        )
+      ) as CompileActions;
     }
 
     let handle = resolver.lookupHelper(name, meta.referrer);
 
     if (handle !== null) {
-      helper(state, { handle, params, hash });
+      out = concatActions(out, helper({ handle, params, hash }));
     } else {
       throw new Error(`Compile Error: ${name} is not a helper`);
     }
+
+    return out as CompileActions;
   });
 
   EXPRESSIONS.addLeaf(SexpOpcodes.Get, ([, head, path]) => [
@@ -619,33 +642,37 @@ export function expressionCompiler(): ExpressionCompilers<unknown> {
     ...path.map(p => op(Op.GetProperty, str(p))),
   ]);
 
-  EXPRESSIONS.addLeaf(SexpOpcodes.MaybeLocal, (sexp, encoder, meta) => {
+  EXPRESSIONS.addLeaf(SexpOpcodes.MaybeLocal, (sexp, meta) => {
     let [, path] = sexp;
+
+    let out: CompileAction[] = [];
 
     if (meta.asPartial) {
       let head = path[0];
       path = path.slice(1);
 
-      encoder.push(Op.ResolveMaybeLocal, str(head));
+      out.push(op(Op.ResolveMaybeLocal, str(head)));
     } else {
-      encoder.push(Op.GetVariable, 0);
+      out.push(op(Op.GetVariable, 0));
     }
 
     for (let i = 0; i < path.length; i++) {
-      encoder.push(Op.GetProperty, str(path[i]));
+      out.push(op(Op.GetProperty, str(path[i])));
     }
+
+    return out;
   });
 
   EXPRESSIONS.addLeaf(SexpOpcodes.Undefined, () => {
     return pushPrimitiveReference(undefined);
   });
 
-  EXPRESSIONS.addLeaf(SexpOpcodes.HasBlock, (sexp, encoder) => {
-    encoder.push(Op.HasBlock, sexp[1]);
+  EXPRESSIONS.addLeaf(SexpOpcodes.HasBlock, sexp => {
+    return op(Op.HasBlock, sexp[1]);
   });
 
-  EXPRESSIONS.addLeaf(SexpOpcodes.HasBlockParams, (sexp, encoder) => {
-    hasBlockParams(encoder, sexp[1]);
+  EXPRESSIONS.addLeaf(SexpOpcodes.HasBlockParams, (sexp, _meta, isEager) => {
+    return hasBlockParams(sexp[1], isEager);
   });
 
   return EXPRESSIONS;
@@ -815,7 +842,7 @@ export function populateBuiltins<Locator>(
 
     replayableIf(encoder, {
       args() {
-        expr(params[0], { encoder, resolver, meta });
+        encoder.concat(expr(params[0], { encoder, resolver, meta }));
         encoder.push(Op.ToBoolean);
         return 1;
       },
@@ -851,7 +878,7 @@ export function populateBuiltins<Locator>(
 
     replayableIf(encoder, {
       args() {
-        expr(params[0], { encoder, resolver, meta });
+        encoder.concat(expr(params[0], { encoder, resolver, meta }));
         encoder.push(Op.ToBoolean);
         return 1;
       },
@@ -887,7 +914,7 @@ export function populateBuiltins<Locator>(
 
     replayableIf(encoder, {
       args() {
-        expr(params[0], { encoder, resolver, meta });
+        encoder.concat(expr(params[0], { encoder, resolver, meta }));
         encoder.push(Op.Dup, $sp, 0);
         encoder.push(Op.ToBoolean);
         return 2;
@@ -932,12 +959,12 @@ export function populateBuiltins<Locator>(
     replayable(encoder, {
       args() {
         if (hash && hash[0][0] === 'key') {
-          expr(hash[1][0], { encoder, resolver, meta });
+          encoder.concat(expr(hash[1][0], { encoder, resolver, meta }));
         } else {
           encoder.concat(pushPrimitiveReference(null));
         }
 
-        expr(params[0], { encoder, resolver, meta });
+        encoder.concat(expr(params[0], { encoder, resolver, meta }));
 
         return 2;
       },
@@ -986,13 +1013,13 @@ export function populateBuiltins<Locator>(
         for (let i = 0; i < keys.length; i++) {
           let key = keys[i];
           if (key === 'nextSibling' || key === 'guid') {
-            expr(values[i], { encoder, resolver, meta });
+            encoder.concat(expr(values[i], { encoder, resolver, meta }));
           } else {
             throw new Error(`SYNTAX ERROR: #in-element does not take a \`${keys[0]}\` option`);
           }
         }
 
-        expr(params[0], { encoder, resolver, meta });
+        encoder.concat(expr(params[0], { encoder, resolver, meta }));
 
         encoder.push(Op.Dup, $sp, 0);
 

@@ -9,7 +9,7 @@ import { switchCases } from './conditional';
 
 export function main(encoder: OpcodeBuilderEncoder) {
   encoder.push(Op.Main, $s0);
-  invokePreparedComponent(encoder, false, false, true);
+  encoder.concat(invokePreparedComponent(false, false, true));
 }
 
 export function stdAppend(encoder: OpcodeBuilderEncoder, trusting: boolean) {

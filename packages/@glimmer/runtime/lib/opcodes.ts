@@ -9,7 +9,7 @@ import { Opcode, Opaque, Op } from '@glimmer/interfaces';
 import { DEBUG, DEVMODE } from '@glimmer/local-debug-flags';
 // these import bindings will be stripped from build
 import { debug, logOpcode } from '@glimmer/opcode-compiler';
-import { DESTRUCTOR_STACK, INNER_VM, CONSTANTS, STACKS, REGISTERS } from './symbols';
+import { DESTRUCTOR_STACK, INNER_VM, CONSTANTS, STACKS } from './symbols';
 import { InternalVM } from './vm/append';
 
 export interface OpcodeJSON {
@@ -118,10 +118,10 @@ export class AppendOpcodes {
       console.log(
         '%c -> pc: %d, ra: %d, fp: %d, sp: %d, s0: %O, s1: %O, t0: %O, t1: %O, v0: %O',
         'color: orange',
-        vm[REGISTERS][$pc],
-        vm[REGISTERS][$ra],
-        vm[REGISTERS][$fp],
-        vm[REGISTERS][$sp],
+        vm[INNER_VM].registers[$pc],
+        vm[INNER_VM].registers[$ra],
+        vm[INNER_VM].registers[$fp],
+        vm[INNER_VM].registers[$sp],
         vm['s0'],
         vm['s1'],
         vm['t0'],

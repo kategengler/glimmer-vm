@@ -126,7 +126,7 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
     switch (name) {
       case HighLevelBuilderOpcode.Expr:
         let value = arg as HighLevelBuilderMap[HighLevelBuilderOpcode.Expr];
-        expr(value, this.state);
+        this.concat(expr(value, this.state));
         break;
       case HighLevelBuilderOpcode.Args: {
         let {

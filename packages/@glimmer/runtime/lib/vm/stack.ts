@@ -205,6 +205,7 @@ export default class EvaluationStackImpl implements EvaluationStack {
   }
 
   toArray() {
+    console.log(this[REGISTERS]);
     return this.stack.sliceInner(this[REGISTERS][$fp], this[REGISTERS][$sp] + 1);
   }
 }

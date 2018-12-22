@@ -7,6 +7,9 @@ import {
   WireFormat,
   Op,
   MachineOp,
+  CompileActions,
+  HighLevelBuilderOpcode,
+  CompileAction,
 } from '@glimmer/interfaces';
 
 import {
@@ -17,6 +20,7 @@ import {
   Component,
   CurryComponent,
   label,
+  serializable,
 } from '../interfaces';
 import { resolveLayoutForTag, resolveLayoutForHandle } from '../../resolver';
 import { $s0, $sp, $s1, $v0 } from '@glimmer/vm';
@@ -30,7 +34,7 @@ import {
   invokeStatic,
   invokeStaticBlock,
 } from './blocks';
-import { ATTRS_BLOCK, ExprCompilerState } from '../../syntax';
+import { ATTRS_BLOCK, concatActions } from '../../syntax';
 import { labels } from './labels';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { debugCompiler } from '../../compiler';
@@ -38,6 +42,7 @@ import { ComponentArgs } from '../../interfaces';
 import { replayable } from './conditional';
 import { withSavedRegister } from './vm';
 import { EMPTY_ARRAY } from '@glimmer/util';
+import { op } from '../encoder';
 
 export function staticComponentHelper<Locator>(
   encoder: OpcodeBuilderEncoder,
@@ -172,7 +177,7 @@ export function invokeStaticComponent<Locator>(
         let index = keys.indexOf(lookupName);
 
         if (index !== -1) {
-          expr(values[index], state);
+          state.encoder.concat(expr(values[index], state));
           bindings.push({ symbol: i + 1, isBlock: false });
         }
 
@@ -220,7 +225,7 @@ export function invokeDynamicComponent<Locator>(
 
   replayable(encoder, {
     args: () => {
-      expr(definition, state);
+      state.encoder.concat(expr(definition, state));
       encoder.push(Op.Dup, $sp, 0);
       return 2;
     },
@@ -353,56 +358,69 @@ export function invokeComponent<Locator>(
   compileArgs(params, hash, blocks, synthetic, state);
   encoder.push(Op.PrepareArgs, $s0);
 
-  invokePreparedComponent(encoder, blocks.has('default'), bindableBlocks, bindableAtNames, () => {
-    if (layout) {
-      encoder.pushOp(pushSymbolTable(layout.symbolTable));
-      encoder.pushOp(pushCompilable(layout, compiler.isEager));
-      if (!compiler.isEager) encoder.push(Op.CompileBlock);
-    } else {
-      encoder.push(Op.GetComponentLayout, $s0);
-    }
+  encoder.concat(
+    invokePreparedComponent(blocks.has('default'), bindableBlocks, bindableAtNames, () => {
+      let out: CompileActions;
 
-    encoder.push(Op.PopulateLayout, $s0);
-  });
+      if (layout) {
+        out = [
+          pushSymbolTable(layout.symbolTable),
+          pushCompilable(layout, compiler.isEager),
+          compiler.isEager ? undefined : op(Op.CompileBlock),
+        ];
+      } else {
+        out = [op(Op.GetComponentLayout, $s0)];
+      }
+
+      out.push(op(Op.PopulateLayout, $s0));
+      return out;
+    })
+  );
 
   encoder.push(Op.Load, $s0);
 }
 
 export function invokePreparedComponent(
-  encoder: OpcodeBuilderEncoder,
   hasBlock: boolean,
   bindableBlocks: boolean,
   bindableAtNames: boolean,
-  populateLayout: Option<(encoder: OpcodeBuilderEncoder) => void> = null
-) {
-  encoder.push(Op.BeginComponentTransaction);
-  encoder.push(Op.PushDynamicScope);
+  populateLayout: Option<() => CompileActions> = null
+): CompileActions {
+  let out: ReadonlyArray<CompileAction> = [
+    op(Op.BeginComponentTransaction),
+    op(Op.PushDynamicScope),
 
-  encoder.push(Op.CreateComponent, (hasBlock as any) | 0, $s0);
+    op(Op.CreateComponent, (hasBlock as any) | 0, $s0),
+  ];
 
   // this has to run after createComponent to allow
   // for late-bound layouts, but a caller is free
   // to populate the layout earlier if it wants to
   // and do nothing here.
-  if (populateLayout) populateLayout(encoder);
+  if (populateLayout) {
+    out = concatActions(out, populateLayout());
+  }
 
-  encoder.push(Op.RegisterComponentDestructor, $s0);
-  encoder.push(Op.GetComponentSelf, $s0);
+  return concatActions(out, [
+    op(Op.RegisterComponentDestructor, $s0),
+    op(Op.GetComponentSelf, $s0),
 
-  encoder.push(Op.VirtualRootScope, $s0);
-  encoder.push(Op.SetVariable, 0);
+    op(Op.VirtualRootScope, $s0),
+    op(Op.SetVariable, 0),
+    op(Op.SetupForEval, $s0),
 
-  encoder.push(Op.SetupForEval, $s0);
-  if (bindableAtNames) encoder.push(Op.SetNamedVariables, $s0);
-  if (bindableBlocks) encoder.push(Op.SetBlocks, $s0);
-  encoder.push(Op.Pop, 1);
-  encoder.push(Op.InvokeComponentLayout, $s0);
-  encoder.push(Op.DidRenderLayout, $s0);
-  encoder.push(MachineOp.PopFrame);
+    bindableAtNames ? op(Op.SetNamedVariables, $s0) : undefined,
+    bindableBlocks ? op(Op.SetBlocks, $s0) : undefined,
 
-  encoder.push(Op.PopScope);
-  encoder.push(Op.PopDynamicScope);
-  encoder.push(Op.CommitComponentTransaction);
+    op(Op.Pop, 1),
+    op(Op.InvokeComponentLayout, $s0),
+    op(Op.DidRenderLayout, $s0),
+    op(MachineOp.PopFrame),
+
+    op(Op.PopScope),
+    op(Op.PopDynamicScope),
+    op(Op.CommitComponentTransaction),
+  ]) as CompileActions;
 }
 
 export function invokeBareComponent(encoder: OpcodeBuilderEncoder) {
@@ -414,26 +432,27 @@ export function invokeBareComponent(encoder: OpcodeBuilderEncoder) {
   encoder.push(Op.PushEmptyArgs);
   encoder.push(Op.PrepareArgs, $s0);
 
-  invokePreparedComponent(encoder, false, false, true, () => {
-    encoder.push(Op.GetComponentLayout, $s0);
-    encoder.push(Op.PopulateLayout, $s0);
-  });
+  encoder.concat(
+    invokePreparedComponent(false, false, true, () => [
+      op(Op.GetComponentLayout, $s0),
+      op(Op.PopulateLayout, $s0),
+    ])
+  );
 
   encoder.push(Op.Load, $s0);
 }
 
 export function curryComponent<Locator>(
-  state: ExprCompilerState<Locator>,
-  { definition, params, hash, synthetic }: CurryComponent
-): void {
-  let { encoder, meta } = state;
-  let referrer = meta.referrer;
-
-  encoder.push(MachineOp.PushFrame);
-  compileArgs(params, hash, EMPTY_BLOCKS, synthetic, state);
-  encoder.push(Op.CaptureArgs);
-  expr(definition, state);
-  encoder.push(Op.CurryComponent, { type: 'serializable', value: referrer });
-  encoder.push(MachineOp.PopFrame);
-  encoder.push(Op.Fetch, $v0);
+  { definition, params, hash, synthetic }: CurryComponent,
+  referrer: Locator
+): CompileActions {
+  return [
+    op(MachineOp.PushFrame),
+    op(HighLevelBuilderOpcode.Args, { params, hash, blocks: EMPTY_BLOCKS, synthetic }),
+    op(Op.CaptureArgs),
+    op(HighLevelBuilderOpcode.Expr, definition),
+    op(Op.CurryComponent, serializable(referrer)),
+    op(MachineOp.PopFrame),
+    op(Op.Fetch, $v0),
+  ];
 }
