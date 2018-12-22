@@ -263,7 +263,6 @@ export function wrappedComponent<Locator>(
     encoder.push(Op.JumpUnless, label('BODY'));
 
     encoder.push(Op.Fetch, $s1);
-    // encoder.isComponentAttrs = true;
     encoder.push(Op.PutComponentOperations);
     encoder.push(Op.OpenDynamicElement);
     encoder.push(Op.DidCreateElement, $s0);
@@ -272,9 +271,7 @@ export function wrappedComponent<Locator>(
 
     encoder.label('BODY');
 
-    encoder.concat(
-      invokeStaticBlock(encoder, compiler, blockForLayout(layout, compiler, resolver))
-    );
+    encoder.concat(invokeStaticBlock(blockForLayout(layout, compiler, resolver), encoder.isEager));
 
     encoder.push(Op.Fetch, $s1);
     encoder.push(Op.JumpUnless, label('END'));

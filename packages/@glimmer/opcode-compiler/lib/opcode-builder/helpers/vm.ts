@@ -15,21 +15,22 @@ import {
   Op,
   MachineOp,
   BuilderOp,
-  CompileAction,
+  CompileActions,
   PrimitiveType,
+  SingleBuilderOperand,
 } from '@glimmer/interfaces';
 import { compileArgs } from './shared';
 import { EMPTY_BLOCKS } from '../../utils';
 import { ExprCompilerState } from '../../syntax';
-import { OpcodeBuilderOperand, op } from '../encoder';
+import { op } from '../encoder';
 
-export function pushPrimitiveReference(value: Primitive): CompileAction {
+export function pushPrimitiveReference(value: Primitive): CompileActions {
   return [primitive(value), op(Op.PrimitiveReference)];
 }
 
 export function primitive(_primitive: Primitive): BuilderOp {
   let type: PrimitiveType = PrimitiveType.NUMBER;
-  let p: OpcodeBuilderOperand;
+  let p: SingleBuilderOperand;
   switch (typeof _primitive) {
     case 'number':
       if ((_primitive as number) % 1 === 0) {

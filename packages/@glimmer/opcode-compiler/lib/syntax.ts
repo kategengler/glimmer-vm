@@ -7,13 +7,14 @@ import {
   SexpOpcodes,
   Op,
   MachineOp,
-  BuilderOps,
   BuilderOp,
   SexpOpcodeMap,
-  HighLevelBuilderOp,
-  CompileOp,
-  HighLevelCompileOp,
+  HighLevelBuilderOpcode,
   CompileAction,
+  HighLevelCompileOpcode,
+  CompileActions,
+  HighLevelCompileOp,
+  HighLevelBuilderOp,
 } from '@glimmer/interfaces';
 import { assert, dict, unwrap, EMPTY_ARRAY } from '@glimmer/util';
 import { $fp, $s0, $sp } from '@glimmer/vm';
@@ -28,7 +29,6 @@ import OpcodeBuilder, {
   optionStr,
   bool,
   label,
-  expression,
 } from './opcode-builder/interfaces';
 
 import { WireFormat } from '@glimmer/interfaces';
@@ -65,12 +65,8 @@ import { replayableIf, replayable } from './opcode-builder/helpers/conditional';
 import { modifier, staticAttr, remoteElement } from './opcode-builder/helpers/dom';
 import { op } from './opcode-builder/encoder';
 
-export type StatementCompileAction =
-  | CompileAction
-  | (CompileOp | void | undefined)[]
-  | CompileOp
-  | void
-  | undefined;
+export type StatementCompileAction = CompileAction | HighLevelCompileOp;
+export type StatementCompileActions = StatementCompileAction | StatementCompileAction[];
 
 export type TupleSyntax =
   | WireFormat.Statement
@@ -82,16 +78,16 @@ export type StatementCompilerFunction<T extends TupleSyntax, Locator> = ((
   resolver: CompileTimeLookup<Locator>,
   compiler: OpcodeBuilderCompiler<Locator>,
   meta: ContainingMetadata<Locator>
-) => StatementCompileAction | void);
+) => StatementCompileActions | void);
 export type SimpleCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
   state: ExprCompilerState<Locator>
-) => CompileAction | void);
+) => CompileActions | void);
 export type LeafCompilerFunction<T extends TupleSyntax, Locator> = ((
   sexp: T,
   encoder: OpcodeBuilderEncoder,
   meta: ContainingMetadata<Locator>
-) => CompileAction | void);
+) => CompileActions | void);
 export type RegisteredSyntax<T extends TupleSyntax, Locator> =
   | { type: 'leaf'; f: LeafCompilerFunction<T, Locator> }
   | { type: 'mini'; f: SimpleCompilerFunction<T, Locator> }
@@ -153,13 +149,15 @@ export class ExpressionCompilers<Locator = unknown> {
   }
 }
 
-function isCompileOp(action: BuilderOp | CompileOp): action is CompileOp {
+function isCompileOp(
+  action: BuilderOp | HighLevelBuilderOp | HighLevelCompileOp
+): action is HighLevelCompileOp {
   return action.op === 'InlineBlock';
 }
 
 function concatStatement<Locator>(
   builder: OpcodeBuilder<Locator>,
-  action: StatementCompileAction
+  action: StatementCompileActions
 ): void {
   if (action === undefined) {
     return;
@@ -170,7 +168,7 @@ function concatStatement<Locator>(
   } else {
     if (isCompileOp(action)) {
       switch (action.op) {
-        case HighLevelCompileOp.InlineBlock:
+        case HighLevelCompileOpcode.InlineBlock:
           inlineBlock(action.op1, builder.compiler, builder.resolver, builder.meta);
       }
     } else {
@@ -179,7 +177,7 @@ function concatStatement<Locator>(
   }
 }
 
-export function concat(encoder: OpcodeBuilderEncoder, action: CompileAction): void {
+export function concat(encoder: OpcodeBuilderEncoder, action: CompileActions): void {
   if (action === undefined) {
     return;
   } else if (Array.isArray(action)) {
@@ -231,7 +229,7 @@ export class Compilers<Syntax extends TupleSyntax, Locator = unknown> {
     let func = this.funcs[index];
     assert(!!func, `expected an implementation for ${sexp![0]}`);
 
-    let ops: CompileAction | void;
+    let ops: CompileActions | void;
     if (func.type === 'mini') {
       ops = func.f(sexp as Syntax, { encoder, resolver, meta });
     } else if (func.type === 'statement') {
@@ -504,11 +502,11 @@ export function statementCompiler(): Compilers<WireFormat.Statement, unknown> {
   return STATEMENTS;
 }
 
-function dynamicAttr(sexp: S.DynamicAttr | S.TrustingAttr, trusting: boolean): CompileAction {
+function dynamicAttr(sexp: S.DynamicAttr | S.TrustingAttr, trusting: boolean): CompileActions {
   let [, name, value, namespace] = sexp;
 
   return [
-    op(HighLevelBuilderOp.Expr, expression(value)),
+    op(HighLevelBuilderOpcode.Expr, value),
     op(Op.DynamicAttr, str(name), bool(trusting), optionStr(namespace)),
   ];
   // expr(value, state);
@@ -532,7 +530,7 @@ function componentAttr(sexp: S.ComponentAttr | S.TrustingComponentAttr, trusting
   let [, name, value, namespace] = sexp;
 
   return [
-    op(HighLevelBuilderOp.Expr, expression(value)),
+    op(HighLevelBuilderOpcode.Expr, value),
     op(Op.ComponentAttr, str(name), bool(trusting), optionStr(namespace)),
   ];
 }
@@ -798,7 +796,7 @@ export function populateBuiltins<Locator>(
   blocks: Blocks<Locator> = new Blocks(),
   inlines: Inlines<Locator> = new Inlines()
 ): { blocks: Blocks<Locator>; inlines: Inlines<Locator> } {
-  blocks.add('if', (params, _hash, blocks, encoder, resolver, compiler, meta) => {
+  blocks.add('if', (params, _hash, blocks, encoder, resolver, _compiler, meta) => {
     //        PutArgs
     //        Test(Environment)
     //        Enter(BEGIN, END)
@@ -823,18 +821,18 @@ export function populateBuiltins<Locator>(
       },
 
       ifTrue() {
-        encoder.concat(invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default'))));
+        encoder.concat(invokeStaticBlock(unwrap(blocks.get('default')), encoder.isEager));
       },
 
       ifFalse() {
         if (blocks.has('else')) {
-          encoder.concat(invokeStaticBlock(encoder, compiler, blocks.get('else')!));
+          encoder.concat(invokeStaticBlock(blocks.get('else')!, encoder.isEager));
         }
       },
     });
   });
 
-  blocks.add('unless', (params, _hash, blocks, encoder, resolver, compiler, meta) => {
+  blocks.add('unless', (params, _hash, blocks, encoder, resolver, _compiler, meta) => {
     //        PutArgs
     //        Test(Environment)
     //        Enter(BEGIN, END)
@@ -860,12 +858,12 @@ export function populateBuiltins<Locator>(
 
       ifTrue() {
         if (blocks.has('else')) {
-          encoder.concat(invokeStaticBlock(encoder, compiler, blocks.get('else')!));
+          encoder.concat(invokeStaticBlock(blocks.get('else')!, encoder.isEager));
         }
       },
 
       ifFalse() {
-        encoder.concat(invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default'))));
+        encoder.concat(invokeStaticBlock(unwrap(blocks.get('default')), encoder.isEager));
       },
     });
   });
@@ -901,7 +899,7 @@ export function populateBuiltins<Locator>(
 
       ifFalse() {
         if (blocks.has('else')) {
-          encoder.concat(invokeStaticBlock(encoder, compiler, blocks.get('else')!));
+          encoder.concat(invokeStaticBlock(blocks.get('else')!, encoder.isEager));
         }
       },
     });
@@ -970,13 +968,13 @@ export function populateBuiltins<Locator>(
         encoder.label('ELSE');
 
         if (blocks.has('else')) {
-          encoder.concat(invokeStaticBlock(encoder, compiler, blocks.get('else')!));
+          encoder.concat(invokeStaticBlock(blocks.get('else')!, encoder.isEager));
         }
       },
     });
   });
 
-  blocks.add('in-element', (params, hash, blocks, encoder, resolver, compiler, meta) => {
+  blocks.add('in-element', (params, hash, blocks, encoder, resolver, _compiler, meta) => {
     if (!params || params.length !== 1) {
       throw new Error(`SYNTAX ERROR: #in-element requires a single argument`);
     }
@@ -1003,23 +1001,23 @@ export function populateBuiltins<Locator>(
 
       ifTrue() {
         remoteElement(encoder, () =>
-          encoder.concat(invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default'))))
+          encoder.concat(invokeStaticBlock(unwrap(blocks.get('default')), encoder.isEager))
         );
       },
     });
   });
 
-  blocks.add('-with-dynamic-vars', (_params, hash, blocks, encoder, resolver, compiler, meta) => {
+  blocks.add('-with-dynamic-vars', (_params, hash, blocks, encoder, resolver, _compiler, meta) => {
     if (hash) {
       let [names, expressions] = hash;
 
       params(expressions, { encoder, resolver, meta });
 
       dynamicScope(encoder, names, () => {
-        encoder.concat(invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default'))));
+        encoder.concat(invokeStaticBlock(unwrap(blocks.get('default')), encoder.isEager));
       });
     } else {
-      encoder.concat(invokeStaticBlock(encoder, compiler, unwrap(blocks.get('default'))));
+      encoder.concat(invokeStaticBlock(unwrap(blocks.get('default')), encoder.isEager));
     }
   });
 

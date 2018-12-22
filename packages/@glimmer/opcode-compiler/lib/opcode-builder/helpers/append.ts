@@ -1,10 +1,10 @@
 import { op } from '../encoder';
-import { HighLevelBuilderOp, WireFormat, MachineOp, BuilderOps } from '@glimmer/interfaces';
+import { HighLevelBuilderOpcode, WireFormat, MachineOp, BuilderOp } from '@glimmer/interfaces';
 
-export function guardedAppend(expression: WireFormat.Expression, trusting: boolean): BuilderOps {
+export function guardedAppend(expression: WireFormat.Expression, trusting: boolean): BuilderOp[] {
   return [
     op(MachineOp.PushFrame),
-    op(HighLevelBuilderOp.Expr, { type: 'expr', value: expression }),
+    op(HighLevelBuilderOpcode.Expr, expression),
     op(MachineOp.InvokeStatic, {
       type: 'stdlib',
       value: trusting ? 'trusting-append' : 'cautious-append',

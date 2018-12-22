@@ -7,20 +7,20 @@ import {
   CompilableTemplate,
   NamedBlocks,
   WireFormat,
-  HighLevelBuilderOp,
+  HighLevelBuilderOpcode,
   MachineOp,
   Op,
   BuilderOp,
-  CompileAction,
+  CompileActions,
 } from '@glimmer/interfaces';
 import { $fp } from '@glimmer/vm';
 import { EMPTY_BLOCKS, CompilableBlockImpl, PLACEHOLDER_HANDLE } from '@glimmer/opcode-compiler';
 
-import { OpcodeBuilderEncoder, OpcodeBuilderCompiler, other, args, option } from '../interfaces';
+import { OpcodeBuilderEncoder, OpcodeBuilderCompiler, other } from '../interfaces';
 
 import { primitive } from './vm';
 import { NamedBlocksImpl } from '../../utils';
-import { op, OpcodeBuilderOps } from '../encoder';
+import { op } from '../encoder';
 
 export function invokeStatic(
   encoder: OpcodeBuilderEncoder,
@@ -52,14 +52,11 @@ export function yieldBlock(
   to: number,
   params: Option<WireFormat.Core.Params>,
   isEager: boolean
-): OpcodeBuilderOps {
+): CompileActions {
   return [
-    op(
-      HighLevelBuilderOp.Args,
-      args({ params, hash: null, blocks: EMPTY_BLOCKS, synthetic: false })
-    ),
+    op(HighLevelBuilderOpcode.Args, { params, hash: null, blocks: EMPTY_BLOCKS, synthetic: false }),
     op(Op.GetBlock, to),
-    op(HighLevelBuilderOp.Option, option(!isEager ? [op(Op.CompileBlock)] : null)),
+    op(HighLevelBuilderOpcode.Option, !isEager ? [op(Op.CompileBlock)] : null),
     op(Op.InvokeYield),
     op(Op.PopScope),
     op(MachineOp.PopFrame),
@@ -69,7 +66,7 @@ export function yieldBlock(
 export function pushYieldableBlock(
   encoder: OpcodeBuilderEncoder,
   block: Option<CompilableBlock>
-): CompileAction {
+): CompileActions {
   return [
     pushSymbolTable(block && block.symbolTable),
     op(Op.PushBlockScope),
@@ -87,25 +84,14 @@ export function pushCompilable(block: Option<CompilableTemplate>, isEager: boole
   }
 }
 
-export function invokeStaticBlock<Locator>(
-  encoder: OpcodeBuilderEncoder,
-  compiler: OpcodeBuilderCompiler<Locator>,
-  block: CompilableBlock
-): CompileAction {
+export function invokeStaticBlock(block: CompilableBlock, isEager: boolean): CompileActions {
   return [
     op(MachineOp.PushFrame),
-    pushCompilable(block, encoder.isEager),
-    encoder.isEager ? undefined : op(Op.CompileBlock),
+    pushCompilable(block, isEager),
+    isEager ? undefined : op(Op.CompileBlock),
     op(MachineOp.InvokeVirtual),
     op(MachineOp.PopFrame),
   ];
-  // encoder.push(MachineOp.PushFrame);
-
-  // pushCompilable(encoder, block, compiler.isEager);
-  // if (!compiler.isEager) encoder.push(Op.CompileBlock);
-  // encoder.push(MachineOp.InvokeVirtual);
-
-  // encoder.push(MachineOp.PopFrame);
 }
 
 export function invokeStaticBlockWithStack<Locator>(

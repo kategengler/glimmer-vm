@@ -1,7 +1,13 @@
 import { CompileTimeConstants, CompileTimeHeap } from '../program';
-import { Dict } from '../core';
-import { BuilderOperands, Operands, BuilderOperand, MachineBuilderOperand } from './operands';
-import { STDLib, ContainingMetadata } from '../template';
+import { Dict, Option } from '../core';
+import {
+  Operands,
+  BuilderOperand,
+  SingleBuilderOperand,
+  BuilderHandleThunk,
+  SingleBuilderOperands,
+} from './operands';
+import { STDLib, ContainingMetadata, NamedBlocks } from '../template';
 import { CompileTimeLookup } from '../serialize';
 import { Op, MachineOp } from '../vm-opcodes';
 import { WireFormat } from '@glimmer/interfaces';
@@ -15,36 +21,62 @@ export interface Labels<InstructionEncoder> {
   patch(encoder: InstructionEncoder): void;
 }
 
-export const enum HighLevelBuilderOp {
+export const enum HighLevelBuilderOpcode {
   Expr = 'Expr',
   Args = 'Args',
   Option = 'Option',
 }
 
-export const enum HighLevelCompileOp {
+export interface HighLevelBuilderMap {
+  [HighLevelBuilderOpcode.Expr]: WireFormat.Expression;
+  [HighLevelBuilderOpcode.Args]: {
+    params: Option<WireFormat.Core.Params>;
+    hash: WireFormat.Core.Hash;
+    blocks: NamedBlocks;
+    synthetic: boolean;
+  };
+  [HighLevelBuilderOpcode.Option]: Option<BuilderOp[]>;
+}
+
+export type HighLevelOperand = HighLevelBuilderMap[keyof HighLevelBuilderMap];
+
+export const enum HighLevelCompileOpcode {
   InlineBlock = 'InlineBlock',
 }
 
-export interface HighLevelCompileOpMap {
-  [HighLevelCompileOp.InlineBlock]: [WireFormat.SerializedInlineBlock];
+export interface HighLevelCompileMap {
+  [HighLevelCompileOpcode.InlineBlock]: WireFormat.SerializedInlineBlock;
 }
 
-export type BuilderOpcode = Op | MachineOp | HighLevelBuilderOp;
+export type BuilderOpcode = Op | MachineOp;
+
+/**
+ * Vocabulary (in progress)
+ *
+ * Op: An entire operation (composed of an Opcode and 0-3 operands)
+ * Opcode: The name of the operation
+ * Operand: An operand passed to the operation
+ */
 
 export interface BuilderOp {
   op: BuilderOpcode;
-  op1?: MachineBuilderOperand;
-  op2?: MachineBuilderOperand;
-  op3?: MachineBuilderOperand;
+  op1?: SingleBuilderOperand | BuilderHandleThunk;
+  op2?: SingleBuilderOperand | BuilderHandleThunk;
+  op3?: SingleBuilderOperand | BuilderHandleThunk;
 }
 
-export type CompileOps = {
-  [P in keyof HighLevelCompileOpMap]: { op: P; op1: HighLevelCompileOpMap[P] }
-};
+export interface HighLevelBuilderOp<T extends HighLevelBuilderOpcode = HighLevelBuilderOpcode> {
+  op: T;
+  op1: HighLevelBuilderMap[T];
+}
 
-export type CompileOp = CompileOps[keyof CompileOps];
-export type BuilderOps = (BuilderOp | undefined)[];
-export type CompileAction = void | undefined | BuilderOps | BuilderOp;
+export interface HighLevelCompileOp<T extends HighLevelCompileOpcode = HighLevelCompileOpcode> {
+  op: T;
+  op1: HighLevelCompileMap[T];
+}
+
+export type CompileAction = void | undefined | BuilderOp | HighLevelBuilderOp;
+export type CompileActions = CompileAction | CompileAction[];
 
 /**
  * The Encoder receives a stream of opcodes from the syntax compiler and turns
@@ -71,11 +103,11 @@ export interface Encoder<InstructionEncoder> {
    * @param args up to three operands, formatted as
    *   { type: "type", value: value }
    */
-  push(opcode: Op | MachineOp, ...args: BuilderOperands): void;
+  push(opcode: BuilderOpcode, ...args: SingleBuilderOperands): void;
 
-  pushOp(opcode: BuilderOp): void;
+  pushOp<T extends HighLevelBuilderOpcode>(opcode: BuilderOp | HighLevelBuilderOp<T>): void;
 
-  concat(opcodes: CompileAction): void;
+  concat(opcodes: CompileActions): void;
 
   /**
    * Start a new labels block. A labels block is a scope for labels that

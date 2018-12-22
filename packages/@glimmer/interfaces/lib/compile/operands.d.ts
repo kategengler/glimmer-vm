@@ -1,7 +1,15 @@
 import { Option } from '../core';
 import * as WireFormat from './wire-format';
 import { NamedBlocks } from '../template';
-import { BuilderOps, HighLevelCompileOp, HighLevelCompileOpMap } from './encoder';
+import {
+  HighLevelCompileOp,
+  HighLevelBuilderOp,
+  HighLevelBuilderOpcode,
+  BuilderOp,
+  HighLevelCompileMap,
+  HighLevelCompileOpcode,
+  CompileActions,
+} from './encoder';
 import { OpcodeBuilder } from '@glimmer/opcode-compiler';
 
 export const enum PrimitiveType {
@@ -99,19 +107,19 @@ export interface ArgsOperand {
 
 export interface OptionOperand {
   type: 'option';
-  value: Option<BuilderOps>;
+  value: Option<CompileActions>;
 }
 
 export interface InlineBlockOperand {
   type: 'inline-block';
-  value: HighLevelCompileOpMap[HighLevelCompileOp.InlineBlock];
+  value: HighLevelCompileMap[HighLevelCompileOpcode.InlineBlock];
 }
 
 export interface PrimitiveOperand {
   type: 'primitive';
   value: {
     type: PrimitiveType;
-    primitive: BuilderOperand;
+    primitive: SingleBuilderOperand;
   };
 }
 
@@ -131,10 +139,15 @@ export type NonlabelBuilderOperand =
   | PrimitiveOperand
   | number;
 
-export type HighLevelOperand = ExpressionOperand | ArgsOperand | OptionOperand;
-export type BuilderOperand = NonlabelBuilderOperand | LabelOperand | HighLevelOperand;
-export type MachineBuilderOperand = BuilderOperand | BuilderHandleThunk;
+export type SingleBuilderOperand = NonlabelBuilderOperand | LabelOperand | BuilderHandleThunk;
+export type BuilderOperand = SingleBuilderOperand | HighLevelBuilderOp<HighLevelBuilderOpcode>;
 export type CompileOperand = InlineBlockOperand;
+
+export type SingleBuilderOperandsTuple =
+  | []
+  | [SingleBuilderOperand]
+  | [SingleBuilderOperand, SingleBuilderOperand]
+  | [SingleBuilderOperand, SingleBuilderOperand, SingleBuilderOperand];
 
 export type BuilderOperandsTuple =
   | []
@@ -142,13 +155,7 @@ export type BuilderOperandsTuple =
   | [BuilderOperand, BuilderOperand]
   | [BuilderOperand, BuilderOperand, BuilderOperand];
 
-export type MachineBuilderOperandsTuple =
-  | []
-  | [MachineBuilderOperand]
-  | [MachineBuilderOperand, MachineBuilderOperand]
-  | [MachineBuilderOperand, MachineBuilderOperand, MachineBuilderOperand];
-
-export type BuilderOperands = MachineBuilderOperandsTuple & MachineBuilderOperand[];
+export type SingleBuilderOperands = SingleBuilderOperandsTuple & SingleBuilderOperand[];
 
 export type BuilderHandleThunk = (() => number);
 

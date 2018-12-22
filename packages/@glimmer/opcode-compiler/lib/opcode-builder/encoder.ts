@@ -2,26 +2,23 @@ import { InstructionEncoder, OpcodeSize } from '@glimmer/encoder';
 import {
   CompileTimeConstants,
   Labels,
-  BuilderOperands,
   LabelOperand,
-  MachineBuilderOperand,
   BuilderHandleThunk,
   Operand,
   CompileTimeHeap,
   CompileTimeProgram,
-  BuilderOps,
   ContainingMetadata,
   CompileTimeLookup,
   BuilderOpcode,
-  HighLevelBuilderOp,
+  HighLevelBuilderOpcode,
   BuilderOp,
-  ArgsOperand,
-  ExpressionOperand,
-  OptionOperand,
-  BuilderOperand,
   MachineOp,
-  CompileAction,
   PrimitiveType,
+  SingleBuilderOperand,
+  SingleBuilderOperands,
+  HighLevelBuilderMap,
+  HighLevelBuilderOp,
+  CompileActions,
 } from '@glimmer/interfaces';
 import { isMachineOp } from '@glimmer/vm';
 import { LazyConstants, CompileTimeHeapImpl, Program } from '@glimmer/program';
@@ -56,21 +53,31 @@ export class LabelsImpl implements Labels<InstructionEncoder> {
   }
 }
 
-export type OpcodeBuilderOpcode = BuilderOpcode;
-export type OpcodeBuilderOperand = BuilderOperand;
-export type OpcodeBuilderOperands = BuilderOperands;
-export type OpcodeBuilderOps = BuilderOps;
+export function op(name: BuilderOpcode, ...args: SingleBuilderOperands): BuilderOp;
+export function op<T extends HighLevelBuilderOpcode>(
+  name: T,
+  arg: HighLevelBuilderMap[T]
+): BuilderOp;
+export function op<T extends HighLevelBuilderOpcode>(
+  name: BuilderOpcode | T,
+  ...args: SingleBuilderOperands | [HighLevelBuilderMap[T]]
+): BuilderOp | HighLevelBuilderOp<T> {
+  if (typeof name === 'string') {
+    return { op: name, op1: args[0] } as HighLevelBuilderOp<T>;
+  } else {
+    switch (args.length) {
+      case 0:
+        return { op: name };
+      case 1:
+        return { op: name, op1: args[0] } as BuilderOp;
+      case 2:
+        return { op: name, op1: args[0], op2: args[1] };
+      case 3:
+        return { op: name, op1: args[0], op2: args[1], op3: args[2] };
 
-export function op(name: OpcodeBuilderOpcode, ...args: OpcodeBuilderOperands): BuilderOp {
-  switch (args.length) {
-    case 0:
-      return { op: name };
-    case 1:
-      return { op: name, op1: args[0] };
-    case 2:
-      return { op: name, op1: args[0], op2: args[1] };
-    case 3:
-      return { op: name, op1: args[0], op2: args[1], op3: args[2] };
+      default:
+        throw new Error(`Exhausted: ${args}`);
+    }
   }
 }
 
@@ -105,10 +112,8 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
     return commit(heap, this.size, this.encoder.buffer);
   }
 
-  push(name: OpcodeBuilderOpcode, ...args: OpcodeBuilderOperands): void {
-    if (typeof name === 'string') {
-      this.pushHighLevel(name, args[0]);
-    } else if (isMachineOp(name)) {
+  push(name: BuilderOpcode, ...args: SingleBuilderOperands): void {
+    if (isMachineOp(name)) {
       let operands = args.map((operand, i) => this.operand(operand, i));
       return this.encoder.encode(name, OpcodeSize.MACHINE_MASK, ...operands);
     } else {
@@ -117,19 +122,24 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
     }
   }
 
-  private pushHighLevel(name: HighLevelBuilderOp, arg: unknown): void {
+  pushHighLevel<T extends HighLevelBuilderOpcode>(name: T, arg: HighLevelBuilderMap[T]): void {
     switch (name) {
-      case HighLevelBuilderOp.Expr:
-        let { value } = (arg as any) as ExpressionOperand;
+      case HighLevelBuilderOpcode.Expr:
+        let value = arg as HighLevelBuilderMap[HighLevelBuilderOpcode.Expr];
         expr(value, this.state);
         break;
-      case HighLevelBuilderOp.Args: {
-        let { params, hash, blocks, synthetic } = ((arg as any) as ArgsOperand).value;
+      case HighLevelBuilderOpcode.Args: {
+        let {
+          params,
+          hash,
+          blocks,
+          synthetic,
+        } = arg as HighLevelBuilderMap[HighLevelBuilderOpcode.Args];
         compileArgs(params, hash, blocks, synthetic, this.state);
         break;
       }
-      case HighLevelBuilderOp.Option: {
-        let value = ((arg as any) as OptionOperand).value;
+      case HighLevelBuilderOpcode.Option: {
+        let value = arg as HighLevelBuilderMap[HighLevelBuilderOpcode.Option];
 
         if (value === null) {
           return;
@@ -140,26 +150,30 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
     }
   }
 
-  concat(opcodes: CompileAction): void {
+  concat(opcodes: CompileActions): void {
     concat(this, opcodes);
   }
 
-  pushOp(op: BuilderOp): void {
-    if (op.op3 !== undefined) {
-      this.push(op.op, op.op1!, op.op2!, op.op3);
-    } else if (op.op2 !== undefined) {
-      this.push(op.op, op.op1!, op.op2);
-    } else if (op.op1 !== undefined) {
-      this.push(op.op, op.op1);
+  pushOp<T extends HighLevelBuilderOpcode>(op: BuilderOp | HighLevelBuilderOp<T>): void {
+    if (isHighLevel(op)) {
+      this.pushHighLevel(op.op, op.op1);
     } else {
-      this.push(op.op);
+      if (op.op3 !== undefined) {
+        this.push(op.op, op.op1!, op.op2!, op.op3);
+      } else if (op.op2 !== undefined) {
+        this.push(op.op, op.op1!, op.op2);
+      } else if (op.op1 !== undefined) {
+        this.push(op.op, op.op1);
+      } else {
+        this.push(op.op);
+      }
     }
   }
 
   operand(operand: LabelOperand, index: number): number;
   operand(operand: BuilderHandleThunk, index?: number): BuilderHandleThunk;
-  operand(operand: MachineBuilderOperand, index?: number): number;
-  operand(operand: MachineBuilderOperand, index?: number): Operand {
+  operand(operand: SingleBuilderOperand, index?: number): number;
+  operand(operand: SingleBuilderOperand | BuilderHandleThunk, index?: number): Operand {
     if (typeof operand === 'number') {
       return operand;
     }
@@ -198,8 +212,9 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
         let encoded = this.operand(primitive);
         return sizeImmediate(this, (encoded << 3) | type, primitive);
       }
-      case 'expr':
-        throw new Error('TODO: unexpected');
+
+      default:
+        throw new Error(`Exhausted ${operand}`);
     }
   }
 
@@ -228,10 +243,20 @@ export function program(constants: CompileTimeConstants): CompileTimeProgram {
   return new Program(stdlib, constants, heap);
 }
 
+export function isHighLevel<T extends HighLevelBuilderOpcode>(
+  op: BuilderOp | HighLevelBuilderOp<T>
+): op is HighLevelBuilderOp<T> {
+  return typeof op.op === 'string';
+}
+
+export function isBuilderOp(op: BuilderOp | HighLevelBuilderOp): op is BuilderOp {
+  return typeof op.op === 'number';
+}
+
 function sizeImmediate(
   encoder: OpcodeBuilderEncoder,
   shifted: number,
-  primitive: OpcodeBuilderOperand
+  primitive: SingleBuilderOperand
 ) {
   if (shifted >= OpcodeSize.MAX_SIZE || shifted < 0) {
     if (typeof primitive !== 'number') {

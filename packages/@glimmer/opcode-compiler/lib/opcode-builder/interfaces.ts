@@ -24,12 +24,12 @@ import {
   ArgsOptions,
   ArgsOperand,
   OptionOperand,
-  BuilderOps,
   ExpressionOperand,
   LookupHandleOperand,
-  BuilderOperand,
   PrimitiveOperand,
   PrimitiveType,
+  SingleBuilderOperand,
+  CompileActions,
 } from '@glimmer/interfaces';
 
 import { InstructionEncoder } from '@glimmer/encoder';
@@ -159,7 +159,7 @@ export function args(options: ArgsOptions): ArgsOperand {
   return { type: 'args', value: options };
 }
 
-export function option(list: Option<BuilderOps>): OptionOperand {
+export function option(list: Option<CompileActions>): OptionOperand {
   return { type: 'option', value: list };
 }
 
@@ -171,7 +171,7 @@ export function lookup(kind: 'helper', value: string): LookupHandleOperand {
   return { type: 'lookup', value: { kind, value } };
 }
 
-export function prim(operand: BuilderOperand, type: PrimitiveType): PrimitiveOperand {
+export function prim(operand: SingleBuilderOperand, type: PrimitiveType): PrimitiveOperand {
   return { type: 'primitive', value: { primitive: operand, type } };
 }
 

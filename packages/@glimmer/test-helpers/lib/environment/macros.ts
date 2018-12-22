@@ -9,12 +9,12 @@ export default class TestMacros<Locator> extends Macros<Locator> {
 
     let { blocks, inlines } = this;
 
-    blocks.add('identity', (_params, _hash, blocks, encoder, _resolver, compiler, _meta) => {
-      encoder.concat(invokeStaticBlock(encoder, compiler, blocks.get('default')!));
+    blocks.add('identity', (_params, _hash, blocks, encoder, _resolver, _compiler, _meta) => {
+      encoder.concat(invokeStaticBlock(blocks.get('default')!, encoder.isEager));
     });
 
-    blocks.add('render-else', (_params, _hash, blocks, encoder, _resolver, compiler, _meta) => {
-      encoder.concat(invokeStaticBlock(encoder, compiler, blocks.get('else')!));
+    blocks.add('render-else', (_params, _hash, blocks, encoder, _resolver, _compiler, _meta) => {
+      encoder.concat(invokeStaticBlock(blocks.get('else')!, encoder.isEager));
     });
 
     blocks.addMissing((name, params, hash, blocks, encoder, resolver, compiler, meta) => {
