@@ -20,14 +20,16 @@ import {
   OptionOperand,
   BuilderOperand,
   MachineOp,
+  CompileAction,
+  PrimitiveType,
 } from '@glimmer/interfaces';
 import { isMachineOp } from '@glimmer/vm';
 import { LazyConstants, CompileTimeHeapImpl, Program } from '@glimmer/program';
 import { Stack, dict, expect } from '@glimmer/util';
 import { commit } from '../compiler';
 import { compileStd } from './helpers/stdlib';
-import { OpcodeBuilderEncoder } from './interfaces';
-import { ExprCompilerState } from '../syntax';
+import { OpcodeBuilderEncoder, num } from './interfaces';
+import { ExprCompilerState, concat } from '../syntax';
 import { expr, compileArgs } from './helpers/shared';
 
 export type OpcodeBuilderLabels = Labels<InstructionEncoder>;
@@ -55,12 +57,11 @@ export class LabelsImpl implements Labels<InstructionEncoder> {
 }
 
 export type OpcodeBuilderOpcode = BuilderOpcode;
-export type OpcodeBuilderOp = BuilderOp;
 export type OpcodeBuilderOperand = BuilderOperand;
 export type OpcodeBuilderOperands = BuilderOperands;
 export type OpcodeBuilderOps = BuilderOps;
 
-export function op(name: OpcodeBuilderOpcode, ...args: OpcodeBuilderOperands): OpcodeBuilderOp {
+export function op(name: OpcodeBuilderOpcode, ...args: OpcodeBuilderOperands): BuilderOp {
   switch (args.length) {
     case 0:
       return { op: name };
@@ -139,17 +140,19 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
     }
   }
 
-  concat(opcodes: OpcodeBuilderOps): void {
-    for (let op of opcodes) {
-      if (op.op3 !== undefined) {
-        this.push(op.op, op.op1!, op.op2!, op.op3);
-      } else if (op.op2 !== undefined) {
-        this.push(op.op, op.op1!, op.op2);
-      } else if (op.op1 !== undefined) {
-        this.push(op.op, op.op1);
-      } else {
-        this.push(op.op);
-      }
+  concat(opcodes: CompileAction): void {
+    concat(this, opcodes);
+  }
+
+  pushOp(op: BuilderOp): void {
+    if (op.op3 !== undefined) {
+      this.push(op.op, op.op1!, op.op2!, op.op3);
+    } else if (op.op2 !== undefined) {
+      this.push(op.op, op.op1!, op.op2);
+    } else if (op.op1 !== undefined) {
+      this.push(op.op, op.op1);
+    } else {
+      this.push(op.op);
     }
   }
 
@@ -190,6 +193,11 @@ export class EncoderImpl<Locator> implements OpcodeBuilderEncoder {
         return operand;
       case 'handle':
         return this.constants.handle(operand.value);
+      case 'primitive': {
+        let { primitive, type } = operand.value;
+        let encoded = this.operand(primitive);
+        return sizeImmediate(this, (encoded << 3) | type, primitive);
+      }
       case 'expr':
         throw new Error('TODO: unexpected');
     }
@@ -218,4 +226,22 @@ export function program(constants: CompileTimeConstants): CompileTimeProgram {
   let stdlib = compileStd(constants, heap);
 
   return new Program(stdlib, constants, heap);
+}
+
+function sizeImmediate(
+  encoder: OpcodeBuilderEncoder,
+  shifted: number,
+  primitive: OpcodeBuilderOperand
+) {
+  if (shifted >= OpcodeSize.MAX_SIZE || shifted < 0) {
+    if (typeof primitive !== 'number') {
+      throw new Error(
+        "This condition should only be possible if the primitive isn't already a constant"
+      );
+    }
+
+    return (encoder.operand(num(primitive as number)) << 3) | PrimitiveType.BIG_NUM;
+  }
+
+  return shifted;
 }

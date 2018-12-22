@@ -1,9 +1,7 @@
-import { Option, MachineOp, Op } from '@glimmer/interfaces';
+import { Option, MachineOp, Op, HighLevelBuilderOp, CompileAction } from '@glimmer/interfaces';
 
-import { OpcodeBuilderEncoder, str, CompileHelper, Block } from '../interfaces';
-import { compileArgs } from './shared';
+import { OpcodeBuilderEncoder, str, CompileHelper, Block, args, handle } from '../interfaces';
 import { EMPTY_BLOCKS } from '../../utils';
-import { ExprCompilerState, CompileAction } from '../../syntax';
 import { op } from '../encoder';
 
 export function staticAttr(name: string, _namespace: Option<string>, value: string): CompileAction {
@@ -12,16 +10,13 @@ export function staticAttr(name: string, _namespace: Option<string>, value: stri
   return op(Op.StaticAttr, str(name), str(value), namespace);
 }
 
-export function modifier<Locator>(
-  state: ExprCompilerState<Locator>,
-  { handle, params, hash }: CompileHelper
-) {
-  let { encoder } = state;
-
-  encoder.push(MachineOp.PushFrame);
-  compileArgs(params, hash, EMPTY_BLOCKS, true, state);
-  encoder.push(Op.Modifier, { type: 'handle', value: handle });
-  encoder.push(MachineOp.PopFrame);
+export function modifier({ handle: h, params, hash }: CompileHelper) {
+  return [
+    op(MachineOp.PushFrame),
+    op(HighLevelBuilderOp.Args, args({ params, hash, blocks: EMPTY_BLOCKS, synthetic: true })),
+    op(Op.Modifier, handle(h)),
+    op(MachineOp.PopFrame),
+  ];
 }
 
 export function remoteElement(encoder: OpcodeBuilderEncoder, block: Block): void {

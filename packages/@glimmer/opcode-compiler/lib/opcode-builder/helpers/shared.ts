@@ -25,9 +25,9 @@ export function compileArgs<Locator>(
   let { encoder } = state;
 
   if (blocks.hasAny) {
-    pushYieldableBlock(encoder, blocks.get('default'));
-    pushYieldableBlock(encoder, blocks.get('else'));
-    pushYieldableBlock(encoder, blocks.get('attrs'));
+    encoder.concat(pushYieldableBlock(encoder, blocks.get('default')));
+    encoder.concat(pushYieldableBlock(encoder, blocks.get('else')));
+    encoder.concat(pushYieldableBlock(encoder, blocks.get('attrs')));
   }
 
   let count = compileParams(state, params);
@@ -86,7 +86,7 @@ export function expr<Locator>(
   if (Array.isArray(expression)) {
     compileExpression(expression, state);
   } else {
-    primitive(state.encoder, expression);
+    state.encoder.pushOp(primitive(expression));
     state.encoder.push(Op.PrimitiveReference);
   }
 }

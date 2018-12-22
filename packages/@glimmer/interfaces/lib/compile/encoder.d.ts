@@ -4,6 +4,7 @@ import { BuilderOperands, Operands, BuilderOperand, MachineBuilderOperand } from
 import { STDLib, ContainingMetadata } from '../template';
 import { CompileTimeLookup } from '../serialize';
 import { Op, MachineOp } from '../vm-opcodes';
+import { WireFormat } from '@glimmer/interfaces';
 
 export interface Labels<InstructionEncoder> {
   readonly labels: Dict<number>;
@@ -20,6 +21,14 @@ export const enum HighLevelBuilderOp {
   Option = 'Option',
 }
 
+export const enum HighLevelCompileOp {
+  InlineBlock = 'InlineBlock',
+}
+
+export interface HighLevelCompileOpMap {
+  [HighLevelCompileOp.InlineBlock]: [WireFormat.SerializedInlineBlock];
+}
+
 export type BuilderOpcode = Op | MachineOp | HighLevelBuilderOp;
 
 export interface BuilderOp {
@@ -29,7 +38,13 @@ export interface BuilderOp {
   op3?: MachineBuilderOperand;
 }
 
-export type BuilderOps = BuilderOp[];
+export type CompileOps = {
+  [P in keyof HighLevelCompileOpMap]: { op: P; op1: HighLevelCompileOpMap[P] }
+};
+
+export type CompileOp = CompileOps[keyof CompileOps];
+export type BuilderOps = (BuilderOp | undefined)[];
+export type CompileAction = void | undefined | BuilderOps | BuilderOp;
 
 /**
  * The Encoder receives a stream of opcodes from the syntax compiler and turns
@@ -58,7 +73,9 @@ export interface Encoder<InstructionEncoder> {
    */
   push(opcode: Op | MachineOp, ...args: BuilderOperands): void;
 
-  concat(opcodes: BuilderOps): void;
+  pushOp(opcode: BuilderOp): void;
+
+  concat(opcodes: CompileAction): void;
 
   /**
    * Start a new labels block. A labels block is a scope for labels that

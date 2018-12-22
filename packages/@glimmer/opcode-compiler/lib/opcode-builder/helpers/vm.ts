@@ -1,85 +1,77 @@
-import { OpcodeSize } from '@glimmer/encoder';
-import { OpcodeBuilderEncoder, num, bool, str, Block, CompileHelper, label } from '../interfaces';
-import { PrimitiveType } from '@glimmer/program';
+import {
+  OpcodeBuilderEncoder,
+  num,
+  bool,
+  str,
+  Block,
+  CompileHelper,
+  label,
+  prim,
+} from '../interfaces';
 import { SavedRegister, $v0 } from '@glimmer/vm';
 import { Primitive } from '../../interfaces';
-import { Option, Op, MachineOp } from '@glimmer/interfaces';
+import {
+  Option,
+  Op,
+  MachineOp,
+  BuilderOp,
+  CompileAction,
+  PrimitiveType,
+} from '@glimmer/interfaces';
 import { compileArgs } from './shared';
 import { EMPTY_BLOCKS } from '../../utils';
 import { ExprCompilerState } from '../../syntax';
-import { OpcodeBuilderOperand } from '../encoder';
+import { OpcodeBuilderOperand, op } from '../encoder';
 
-export function pushPrimitiveReference(encoder: OpcodeBuilderEncoder, value: Primitive) {
-  primitive(encoder, value);
-  encoder.push(Op.PrimitiveReference);
+export function pushPrimitiveReference(value: Primitive): CompileAction {
+  return [primitive(value), op(Op.PrimitiveReference)];
 }
 
-export function primitive(encoder: OpcodeBuilderEncoder, _primitive: Primitive) {
+export function primitive(_primitive: Primitive): BuilderOp {
   let type: PrimitiveType = PrimitiveType.NUMBER;
-  let primitive: OpcodeBuilderOperand;
+  let p: OpcodeBuilderOperand;
   switch (typeof _primitive) {
     case 'number':
       if ((_primitive as number) % 1 === 0) {
         if ((_primitive as number) > -1) {
-          primitive = _primitive;
+          p = _primitive;
         } else {
-          primitive = num(_primitive);
+          p = num(_primitive);
           type = PrimitiveType.NEGATIVE;
         }
       } else {
-        primitive = num(_primitive);
+        p = num(_primitive);
         type = PrimitiveType.FLOAT;
       }
       break;
     case 'string':
-      primitive = str(_primitive);
+      p = str(_primitive);
       type = PrimitiveType.STRING;
       break;
     case 'boolean':
-      primitive = bool(_primitive);
+      p = bool(_primitive);
       type = PrimitiveType.BOOLEAN_OR_VOID;
       break;
     case 'object':
       // assume null
-      primitive = 2;
+      p = 2;
       type = PrimitiveType.BOOLEAN_OR_VOID;
       break;
     case 'undefined':
-      primitive = 3;
+      p = 3;
       type = PrimitiveType.BOOLEAN_OR_VOID;
       break;
     default:
       throw new Error('Invalid primitive passed to pushPrimitive');
   }
 
-  let encoded = encoder.operand(primitive);
-
-  let immediate = sizeImmediate(encoder, (encoded << 3) | type, primitive);
-  encoder.push(Op.Primitive, immediate);
+  return op(Op.Primitive, prim(p, type));
 }
 
 export function hasBlockParams(encoder: OpcodeBuilderEncoder, to: number) {
   encoder.push(Op.GetBlock, to);
   if (!encoder.isEager) encoder.push(Op.CompileBlock);
   encoder.push(Op.HasBlockParams);
-}
-
-function sizeImmediate(
-  encoder: OpcodeBuilderEncoder,
-  shifted: number,
-  primitive: OpcodeBuilderOperand
-) {
-  if (shifted >= OpcodeSize.MAX_SIZE || shifted < 0) {
-    if (typeof primitive !== 'number') {
-      throw new Error(
-        "This condition should only be possible if the primitive isn't already a constant"
-      );
-    }
-
-    return (encoder.operand(num(primitive as number)) << 3) | PrimitiveType.BIG_NUM;
-  }
-
-  return shifted;
 }
 
 export function frame(encoder: OpcodeBuilderEncoder, block: Block): void {

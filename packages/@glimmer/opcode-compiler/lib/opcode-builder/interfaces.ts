@@ -26,6 +26,10 @@ import {
   OptionOperand,
   BuilderOps,
   ExpressionOperand,
+  LookupHandleOperand,
+  BuilderOperand,
+  PrimitiveOperand,
+  PrimitiveType,
 } from '@glimmer/interfaces';
 
 import { InstructionEncoder } from '@glimmer/encoder';
@@ -161,6 +165,14 @@ export function option(list: Option<BuilderOps>): OptionOperand {
 
 export function expression(expr: WireFormat.Expression): ExpressionOperand {
   return { type: 'expr', value: expr };
+}
+
+export function lookup(kind: 'helper', value: string): LookupHandleOperand {
+  return { type: 'lookup', value: { kind, value } };
+}
+
+export function prim(operand: BuilderOperand, type: PrimitiveType): PrimitiveOperand {
+  return { type: 'primitive', value: { primitive: operand, type } };
 }
 
 export type Operand = number | (() => number);

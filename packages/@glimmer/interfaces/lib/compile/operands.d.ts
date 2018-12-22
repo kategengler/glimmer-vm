@@ -1,7 +1,18 @@
 import { Option } from '../core';
 import * as WireFormat from './wire-format';
 import { NamedBlocks } from '../template';
-import { BuilderOps } from './encoder';
+import { BuilderOps, HighLevelCompileOp, HighLevelCompileOpMap } from './encoder';
+import { OpcodeBuilder } from '@glimmer/opcode-compiler';
+
+export const enum PrimitiveType {
+  NUMBER = 0b000,
+  FLOAT = 0b001,
+  STRING = 0b010,
+  // 0=false 1=true 2=null 3=undefined
+  BOOLEAN_OR_VOID = 0b011,
+  NEGATIVE = 0b100,
+  BIG_NUM = 0b101,
+}
 
 export interface OptionStringOperand {
   readonly type: 'option-string';
@@ -59,6 +70,14 @@ export interface StdlibOperand {
   value: 'main' | 'trusting-append' | 'cautious-append';
 }
 
+export interface LookupHandleOperand {
+  type: 'lookup';
+  value: {
+    kind: 'helper';
+    value: string;
+  };
+}
+
 // TODO: Derive these as well as the shape of valid op() calls from the
 // operand list and high level extensions
 export interface ExpressionOperand {
@@ -83,6 +102,19 @@ export interface OptionOperand {
   value: Option<BuilderOps>;
 }
 
+export interface InlineBlockOperand {
+  type: 'inline-block';
+  value: HighLevelCompileOpMap[HighLevelCompileOp.InlineBlock];
+}
+
+export interface PrimitiveOperand {
+  type: 'primitive';
+  value: {
+    type: PrimitiveType;
+    primitive: BuilderOperand;
+  };
+}
+
 export type NonlabelBuilderOperand =
   | OptionStringOperand
   | StringOperand
@@ -95,11 +127,14 @@ export type NonlabelBuilderOperand =
   | SerializableOperand
   | OtherOperand
   | StdlibOperand
+  | LookupHandleOperand
+  | PrimitiveOperand
   | number;
 
 export type HighLevelOperand = ExpressionOperand | ArgsOperand | OptionOperand;
 export type BuilderOperand = NonlabelBuilderOperand | LabelOperand | HighLevelOperand;
 export type MachineBuilderOperand = BuilderOperand | BuilderHandleThunk;
+export type CompileOperand = InlineBlockOperand;
 
 export type BuilderOperandsTuple =
   | []

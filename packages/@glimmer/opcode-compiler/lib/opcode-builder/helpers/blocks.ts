@@ -10,6 +10,8 @@ import {
   HighLevelBuilderOp,
   MachineOp,
   Op,
+  BuilderOp,
+  CompileAction,
 } from '@glimmer/interfaces';
 import { $fp } from '@glimmer/vm';
 import { EMPTY_BLOCKS, CompilableBlockImpl, PLACEHOLDER_HANDLE } from '@glimmer/opcode-compiler';
@@ -64,30 +66,24 @@ export function yieldBlock(
   ];
 }
 
-export function pushYieldableBlock(encoder: OpcodeBuilderEncoder, block: Option<CompilableBlock>) {
-  pushSymbolTable(encoder, block && block.symbolTable);
-  encoder.push(Op.PushBlockScope);
-
-  if (block === null) {
-    primitive(encoder, null);
-  } else if (encoder.isEager) {
-    primitive(encoder, block.compile());
-  } else {
-    encoder.push(Op.Constant, { type: 'other', value: block });
-  }
+export function pushYieldableBlock(
+  encoder: OpcodeBuilderEncoder,
+  block: Option<CompilableBlock>
+): CompileAction {
+  return [
+    pushSymbolTable(block && block.symbolTable),
+    op(Op.PushBlockScope),
+    pushCompilable(block, encoder.isEager),
+  ];
 }
 
-export function pushCompilable(
-  encoder: OpcodeBuilderEncoder,
-  block: Option<CompilableTemplate>,
-  isEager: boolean
-) {
+export function pushCompilable(block: Option<CompilableTemplate>, isEager: boolean): BuilderOp {
   if (block === null) {
-    primitive(encoder, null);
+    return primitive(null);
   } else if (isEager) {
-    primitive(encoder, block.compile());
+    return primitive(block.compile());
   } else {
-    encoder.push(Op.Constant, { type: 'other', value: block });
+    return op(Op.Constant, other(block));
   }
 }
 
@@ -95,14 +91,21 @@ export function invokeStaticBlock<Locator>(
   encoder: OpcodeBuilderEncoder,
   compiler: OpcodeBuilderCompiler<Locator>,
   block: CompilableBlock
-): void {
-  encoder.push(MachineOp.PushFrame);
+): CompileAction {
+  return [
+    op(MachineOp.PushFrame),
+    pushCompilable(block, encoder.isEager),
+    encoder.isEager ? undefined : op(Op.CompileBlock),
+    op(MachineOp.InvokeVirtual),
+    op(MachineOp.PopFrame),
+  ];
+  // encoder.push(MachineOp.PushFrame);
 
-  pushCompilable(encoder, block, compiler.isEager);
-  if (!compiler.isEager) encoder.push(Op.CompileBlock);
-  encoder.push(MachineOp.InvokeVirtual);
+  // pushCompilable(encoder, block, compiler.isEager);
+  // if (!compiler.isEager) encoder.push(Op.CompileBlock);
+  // encoder.push(MachineOp.InvokeVirtual);
 
-  encoder.push(MachineOp.PopFrame);
+  // encoder.push(MachineOp.PopFrame);
 }
 
 export function invokeStaticBlockWithStack<Locator>(
@@ -126,7 +129,7 @@ export function invokeStaticBlockWithStack<Locator>(
     }
   }
 
-  pushCompilable(encoder, block, compiler.isEager);
+  encoder.pushOp(pushCompilable(block, compiler.isEager));
   if (!compiler.isEager) encoder.push(Op.CompileBlock);
   encoder.push(MachineOp.InvokeVirtual);
 
@@ -137,11 +140,11 @@ export function invokeStaticBlockWithStack<Locator>(
   encoder.push(MachineOp.PopFrame);
 }
 
-export function pushSymbolTable(encoder: OpcodeBuilderEncoder, table: Option<SymbolTable>): void {
+export function pushSymbolTable(table: Option<SymbolTable>): BuilderOp {
   if (table) {
-    encoder.push(Op.PushSymbolTable, { type: 'serializable', value: table });
+    return op(Op.PushSymbolTable, { type: 'serializable', value: table });
   } else {
-    primitive(encoder, null);
+    return primitive(null);
   }
 }
 

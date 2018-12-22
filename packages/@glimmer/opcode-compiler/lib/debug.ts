@@ -1,9 +1,16 @@
-import { CompileTimeConstants, Option, Opaque, Recast, Opcode } from '@glimmer/interfaces';
+import {
+  CompileTimeConstants,
+  Option,
+  Opaque,
+  Recast,
+  Opcode,
+  PrimitiveType,
+} from '@glimmer/interfaces';
 import { opcodeMetadata, Register, $s0, $s1, $t0, $t1, $v0, $fp, $sp, $pc, $ra } from '@glimmer/vm';
 import { DEBUG } from '@glimmer/local-debug-flags';
 import { unreachable, dict } from '@glimmer/util';
 import { Primitive } from '@glimmer/debug';
-import { PrimitiveType, RuntimeProgram } from '@glimmer/program';
+import { RuntimeProgram } from '@glimmer/program';
 
 export interface DebugConstants {
   getNumber(value: number): number;

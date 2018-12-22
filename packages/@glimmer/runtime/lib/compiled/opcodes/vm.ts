@@ -1,4 +1,12 @@
-import { CompilableTemplate, Opaque, Option, Recast, VMHandle, Op } from '@glimmer/interfaces';
+import {
+  PrimitiveType,
+  CompilableTemplate,
+  Opaque,
+  Option,
+  Recast,
+  VMHandle,
+  Op,
+} from '@glimmer/interfaces';
 import {
   CONSTANT_TAG,
   isConst,
@@ -22,7 +30,7 @@ import { APPEND_OPCODES, UpdatingOpcode } from '../../opcodes';
 import { PrimitiveReference } from '../../references';
 import { UpdatingVM } from '../../vm';
 import { Arguments } from '../../vm/arguments';
-import { LazyConstants, PrimitiveType } from '@glimmer/program';
+import { LazyConstants } from '@glimmer/program';
 import { CheckReference, CheckScope } from './-debug-strip';
 import { CONSTANTS } from '../../symbols';
 

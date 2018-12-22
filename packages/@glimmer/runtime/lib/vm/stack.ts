@@ -1,6 +1,5 @@
 import { DEBUG } from '@glimmer/local-debug-flags';
-import { Opaque } from '@glimmer/interfaces';
-import { PrimitiveType } from '@glimmer/program';
+import { Opaque, PrimitiveType } from '@glimmer/interfaces';
 import { unreachable } from '@glimmer/util';
 import { Stack as WasmStack } from '@glimmer/low-level';
 import { MachineRegister, $sp, $fp } from '@glimmer/vm';
